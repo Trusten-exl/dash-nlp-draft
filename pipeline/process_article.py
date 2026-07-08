@@ -27,6 +27,7 @@ def process_article(url):
         pass
     else:
         print(f'Article: {article['title']}')
+        print(article)
 
     # save to db
     article_id = save_article(article=article)
@@ -36,13 +37,13 @@ def process_article(url):
     # classify topics
     topics = classify_article_topics(article=article)
 
-    print(f'Topics: {topics}')
+    # print(f'Topics: {topics}')
 
     sic_codes = classify_sic_article(article)
-    print(f"\nSIC codes: {sic_codes}")
+    # print(f"\nSIC codes: {sic_codes}")
 
     if sic_codes["division"][0]["score"] > 0.2:
-        print("\nHIGH SIC SIMILAIRTY - SAVING...")
+        # print("\nHIGH SIC SIMILAIRTY - SAVING...")
 
         save_sic(sic_codes, article_id)
 
@@ -52,7 +53,7 @@ def process_article(url):
     # classify intent
     intent = classify_article_intent(article)
 
-    print(f'Intent:{intent}')
+    # print(f'Intent:{intent}')
 
     # save to db
     save_intents(i=intent, article_id=article_id)
@@ -60,8 +61,8 @@ def process_article(url):
     # classify format
     format = classify_article_format(article=article)
 
-    print()
-    print(format)
+    # print()
+    # print(format)
 
     # save to db
     save_formats(article_id=article_id, f=format)
@@ -69,46 +70,46 @@ def process_article(url):
     # nlp for use in sentence-by-sentence sentiment analysis / ner
     doc=nlp(article['text'])
 
-    print('NLP complete')
+    # print('NLP complete')
 
-    print('starting sentiment analysis')
+    # print('starting sentiment analysis')
     # full article sentiment
     sentiment = full_article_sent(doc=doc)
     # save to db
     save_article_sentiment(sentiment=sentiment, article_id=article_id)
 
-    print('Sentiment Analysis Complete')
-    print(sentiment)
+    # print('Sentiment Analysis Complete')
+    # print(sentiment)
 
     # process article entities
     entities = extract_ent(doc=doc)
     # save to db
     save_entities(entities=entities, article_id=article_id)
 
-    print('Entities Extracted')
+    # print('Entities Extracted')
 
     # calc entity level sent
     entity_sentiment = ent_sent(entities=entities, doc=doc)
     
-    print('Ent Sent Calculated')
-    print(entity_sentiment)
+    # print('Ent Sent Calculated')
+    # print(entity_sentiment)
     
     # save to db
     save_entity_sentiment(ent_sent=entity_sentiment, article_id=article_id)
 
 
     # politics
-    print('Politics')
+    # print('Politics')
     political_orienattion = classify_poliical_orientation(article=article)
     save_p_orientation(political_orienattion, article_id=article_id)
-    print('Orientation: {political_orientation}')
+    # print('Orientation: {political_orientation}')
 
     political_salience = classify_article_salience(article=article)
     save_p_salience(political_salience, article_id)
-    print('Salience: {political_salience}')
+    # print('Salience: {political_salience}')
 
     print('Complete')
 
     return article_id
 
-# process_article('https://www.cnbc.com/2026/06/23/meta-glasses-are-new-smart-glasses-starting-at-299.html')
+process_article('https://www.cnbc.com/2026/06/23/meta-glasses-are-new-smart-glasses-starting-at-299.html')

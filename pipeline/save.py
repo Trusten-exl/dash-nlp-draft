@@ -11,27 +11,34 @@ def save_article(article):
     """
     cur = execute("""
     INSERT OR REPLACE INTO articles (
-
         url,
-
+        hostname,
+        sitename,
         title,
-
+        description,
+        author,
+        publish_date,
+        modified_date,
+        language,
+        image_url,
         word_count,
-
         text
-
     )
-
-    VALUES (?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """,
     (
-        article['url'],
-
-        article['title'],
-
-        article['word count'],
-
-        article['text']
+        article.get("url"),
+        article.get("hostname"),
+        article.get("sitename"),
+        article.get("title"),
+        article.get("description"),
+        article.get("author"),
+        article.get("publish_date"),
+        article.get("modified_date"),
+        article.get("language"),
+        article.get("image_url"),
+        article.get("word_count"),
+        article.get("text")
     ))
 
     # return article_id for use in connected tables

@@ -11,12 +11,24 @@ CREATE TABLE IF NOT EXISTS articles (
 
     article_id INTEGER PRIMARY KEY AUTOINCREMENT,
 
-    url TEXT UNIQUE,
+    url TEXT NOT NULL,
+
+    hostname TEXT,
+    sitename TEXT,
 
     title TEXT,
+    description TEXT,
+
+    author TEXT,
+
+    publish_date TEXT,
+    modified_date TEXT,
+
+    language TEXT,
+
+    image_url TEXT,
 
     word_count INTEGER,
-
     text TEXT
 )
 """)
@@ -67,8 +79,8 @@ CREATE TABLE IF NOT EXISTS article_sic (
                
     name TEXT NOT NULL,
                
-    confidence REAL NOT NULL,
-);
+    confidence REAL NOT NULL
+)
 """)
 
 # article format
