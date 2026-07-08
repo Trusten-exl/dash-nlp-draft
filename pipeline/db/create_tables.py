@@ -146,6 +146,21 @@ CREATE TABLE IF NOT EXISTS article_sentiment (
 )
 """)
 
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS sent_sentiment (
+
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    
+    article_id INTEGER,
+
+    sentence TEXT,
+
+    sentiment TEXT,
+    
+    score REAL
+)
+""")
+
 # sentiment per entity
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS entity_sentiment (

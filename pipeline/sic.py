@@ -2,189 +2,190 @@ from transformers import pipeline
 from sic_data import DIVISIONS, SIC2, SIC3, SIC4
 
 # pre-set intent names for use in classification - to be edited
-SIC_DIVISIONS = [
+# SIC_DIVISIONS = [
 
-    """
-    Agricultural production, farming, ranching, livestock, crop cultivation,
-    forestry, timber production, commercial fishing, aquaculture, agricultural
-    equipment and operations, or businesses primarily engaged in producing natural
-    food and biological resources. The article's central focus is on industries
-    that cultivate, harvest, or manage renewable natural resources rather than
-    manufacturing, processing, or retailing finished products.
-    """,
+#     """
+#     Agricultural production, farming, ranching, livestock, crop cultivation,
+#     forestry, timber production, commercial fishing, aquaculture, agricultural
+#     equipment and operations, or businesses primarily engaged in producing natural
+#     food and biological resources. The article's central focus is on industries
+#     that cultivate, harvest, or manage renewable natural resources rather than
+#     manufacturing, processing, or retailing finished products.
+#     """,
 
-    """
-    The exploration, extraction, drilling, quarrying, or production of natural
-    resources from the earth, including oil, natural gas, coal, metals,
-    minerals, stone, and other raw materials. The article primarily discusses
-    companies, operations, technology, regulations, or economic activity related
-    to resource extraction rather than manufacturing or distribution.
-    """,
+#     """
+#     The exploration, extraction, drilling, quarrying, or production of natural
+#     resources from the earth, including oil, natural gas, coal, metals,
+#     minerals, stone, and other raw materials. The article primarily discusses
+#     companies, operations, technology, regulations, or economic activity related
+#     to resource extraction rather than manufacturing or distribution.
+#     """,
 
-    """
-    The planning, development, renovation, or construction of residential,
-    commercial, industrial, or public infrastructure projects. The article focuses
-    on construction contractors, engineering firms, building materials, project
-    development, infrastructure investment, or businesses whose primary activity
-    is creating or improving physical structures.
-    """,
+#     """
+#     The planning, development, renovation, or construction of residential,
+#     commercial, industrial, or public infrastructure projects. The article focuses
+#     on construction contractors, engineering firms, building materials, project
+#     development, infrastructure investment, or businesses whose primary activity
+#     is creating or improving physical structures.
+#     """,
 
-    """
-    Businesses or industries that transform raw materials or components into
-    finished physical products through manufacturing, assembly, fabrication, or
-    industrial production. This includes automobiles, machinery, electronics,
-    consumer goods, pharmaceuticals, chemicals, food processing, aerospace,
-    industrial equipment, factories, and production facilities. The emphasis is on
-    making tangible products rather than providing services.
-    """,
+#     """
+#     Businesses or industries that transform raw materials or components into
+#     finished physical products through manufacturing, assembly, fabrication, or
+#     industrial production. This includes automobiles, machinery, electronics,
+#     consumer goods, pharmaceuticals, chemicals, food processing, aerospace,
+#     industrial equipment, factories, and production facilities. The emphasis is on
+#     making tangible products rather than providing services.
+#     """,
 
-    """
-    The movement of people, goods, energy, information, or public resources.
-    Articles primarily discussing airlines, trucking, railroads, shipping,
-    logistics, ports, pipelines, public transit, electricity, water utilities,
-    natural gas distribution, telecommunications infrastructure, or utility
-    providers belong in this category.
-    """,
+#     """
+#     The movement of people, goods, energy, information, or public resources.
+#     Articles primarily discussing airlines, trucking, railroads, shipping,
+#     logistics, ports, pipelines, public transit, electricity, water utilities,
+#     natural gas distribution, telecommunications infrastructure, or utility
+#     providers belong in this category.
+#     """,
 
-    """
-    Businesses whose primary role is purchasing, storing, and distributing goods
-    to other businesses rather than directly to consumers. The article focuses on
-    wholesalers, commercial distributors, supply chains, industrial suppliers,
-    business-to-business commerce, inventory distribution, or wholesale markets.
-    """,
+#     """
+#     Businesses whose primary role is purchasing, storing, and distributing goods
+#     to other businesses rather than directly to consumers. The article focuses on
+#     wholesalers, commercial distributors, supply chains, industrial suppliers,
+#     business-to-business commerce, inventory distribution, or wholesale markets.
+#     """,
 
-    """
-    Businesses that sell products or services directly to individual consumers.
-    The article primarily discusses retailers, supermarkets, department stores,
-    restaurants, online retailers, consumer shopping behavior, retail operations,
-    store openings or closures, pricing, merchandising, or consumer-facing
-    commerce.
-    """,
+#     """
+#     Businesses that sell products or services directly to individual consumers.
+#     The article primarily discusses retailers, supermarkets, department stores,
+#     restaurants, online retailers, consumer shopping behavior, retail operations,
+#     store openings or closures, pricing, merchandising, or consumer-facing
+#     commerce.
+#     """,
 
-    """
-    Financial institutions, investment firms, insurance companies, banking,
-    capital markets, lending, mortgages, venture capital, asset management,
-    financial regulation, commercial or residential real estate, housing markets,
-    property development, or businesses whose primary purpose is managing money,
-    risk, investments, or property.
-    """,
+#     """
+#     Financial institutions, investment firms, insurance companies, banking,
+#     capital markets, lending, mortgages, venture capital, asset management,
+#     financial regulation, commercial or residential real estate, housing markets,
+#     property development, or businesses whose primary purpose is managing money,
+#     risk, investments, or property.
+#     """,
 
-    """
-    Organizations whose primary business is providing professional, technical,
-    educational, healthcare, hospitality, entertainment, consulting, software,
-    information technology, legal, advertising, scientific, or other intangible
-    services rather than producing physical goods. The article focuses on service
-    delivery, expertise, customer support, digital products, healthcare,
-    education, tourism, or other service-based economic activities.
-    """,
+#     """
+#     Organizations whose primary business is providing professional, technical,
+#     educational, healthcare, hospitality, entertainment, consulting, software,
+#     information technology, legal, advertising, scientific, or other intangible
+#     services rather than producing physical goods. The article focuses on service
+#     delivery, expertise, customer support, digital products, healthcare,
+#     education, tourism, or other service-based economic activities.
+#     """,
 
-    """
-    Government agencies, regulatory organizations, public institutions, military
-    administration, public policy implementation, taxation, law enforcement,
-    government operations, or official governmental functions. The article's
-    primary focus is on the activities of government organizations acting in their
-    administrative or regulatory capacity rather than on private industry.
-    """
-]
+#     """
+#     Government agencies, regulatory organizations, public institutions, military
+#     administration, public policy implementation, taxation, law enforcement,
+#     government operations, or official governmental functions. The article's
+#     primary focus is on the activities of government organizations acting in their
+#     administrative or regulatory capacity rather than on private industry.
+#     """
+# ]
 
-Div_MAPPING = {
 
-    "Agriculture, Forestry, and Fishing":
-    """
-    Agricultural production, farming, ranching, livestock, crop cultivation,
-    forestry, timber production, commercial fishing, aquaculture, agricultural
-    equipment and operations, or businesses primarily engaged in producing natural
-    food and biological resources. The article's central focus is on industries
-    that cultivate, harvest, or manage renewable natural resources rather than
-    manufacturing, processing, or retailing finished products.
-    """,
+# Div_MAPPING = {
 
-    "Mining":
-    """
-    The exploration, extraction, drilling, quarrying, or production of natural
-    resources from the earth, including oil, natural gas, coal, metals,
-    minerals, stone, and other raw materials. The article primarily discusses
-    companies, operations, technology, regulations, or economic activity related
-    to resource extraction rather than manufacturing or distribution.
-    """,
+#     "Agriculture, Forestry, and Fishing":
+#     """
+#     Agricultural production, farming, ranching, livestock, crop cultivation,
+#     forestry, timber production, commercial fishing, aquaculture, agricultural
+#     equipment and operations, or businesses primarily engaged in producing natural
+#     food and biological resources. The article's central focus is on industries
+#     that cultivate, harvest, or manage renewable natural resources rather than
+#     manufacturing, processing, or retailing finished products.
+#     """,
 
-    "Construction":
-    """
-    The planning, development, renovation, or construction of residential,
-    commercial, industrial, or public infrastructure projects. The article focuses
-    on construction contractors, engineering firms, building materials, project
-    development, infrastructure investment, or businesses whose primary activity
-    is creating or improving physical structures.
-    """,
+#     "Mining":
+#     """
+#     The exploration, extraction, drilling, quarrying, or production of natural
+#     resources from the earth, including oil, natural gas, coal, metals,
+#     minerals, stone, and other raw materials. The article primarily discusses
+#     companies, operations, technology, regulations, or economic activity related
+#     to resource extraction rather than manufacturing or distribution.
+#     """,
 
-    "Manufacturing":
-    """
-    Businesses or industries that transform raw materials or components into
-    finished physical products through manufacturing, assembly, fabrication, or
-    industrial production. This includes automobiles, machinery, electronics,
-    consumer goods, pharmaceuticals, chemicals, food processing, aerospace,
-    industrial equipment, factories, and production facilities. The emphasis is on
-    making tangible products rather than providing services.
-    """,
+#     "Construction":
+#     """
+#     The planning, development, renovation, or construction of residential,
+#     commercial, industrial, or public infrastructure projects. The article focuses
+#     on construction contractors, engineering firms, building materials, project
+#     development, infrastructure investment, or businesses whose primary activity
+#     is creating or improving physical structures.
+#     """,
 
-    "Transportation and Public Utilities":
-    """
-    The movement of people, goods, energy, information, or public resources.
-    Articles primarily discussing airlines, trucking, railroads, shipping,
-    logistics, ports, pipelines, public transit, electricity, water utilities,
-    natural gas distribution, telecommunications infrastructure, or utility
-    providers belong in this category.
-    """,
+#     "Manufacturing":
+#     """
+#     Businesses or industries that transform raw materials or components into
+#     finished physical products through manufacturing, assembly, fabrication, or
+#     industrial production. This includes automobiles, machinery, electronics,
+#     consumer goods, pharmaceuticals, chemicals, food processing, aerospace,
+#     industrial equipment, factories, and production facilities. The emphasis is on
+#     making tangible products rather than providing services.
+#     """,
 
-    "Wholesale Trade":
-    """
-    Businesses whose primary role is purchasing, storing, and distributing goods
-    to other businesses rather than directly to consumers. The article focuses on
-    wholesalers, commercial distributors, supply chains, industrial suppliers,
-    business-to-business commerce, inventory distribution, or wholesale markets.
-    """,
+#     "Transportation and Public Utilities":
+#     """
+#     The movement of people, goods, energy, information, or public resources.
+#     Articles primarily discussing airlines, trucking, railroads, shipping,
+#     logistics, ports, pipelines, public transit, electricity, water utilities,
+#     natural gas distribution, telecommunications infrastructure, or utility
+#     providers belong in this category.
+#     """,
 
-    "Retail Trade":
-    """
-    Businesses that sell products or services directly to individual consumers.
-    The article primarily discusses retailers, supermarkets, department stores,
-    restaurants, online retailers, consumer shopping behavior, retail operations,
-    store openings or closures, pricing, merchandising, or consumer-facing
-    commerce.
-    """,
+#     "Wholesale Trade":
+#     """
+#     Businesses whose primary role is purchasing, storing, and distributing goods
+#     to other businesses rather than directly to consumers. The article focuses on
+#     wholesalers, commercial distributors, supply chains, industrial suppliers,
+#     business-to-business commerce, inventory distribution, or wholesale markets.
+#     """,
 
-    "Finance, Insurance, and Real Estate":
-    """
-    Financial institutions, investment firms, insurance companies, banking,
-    capital markets, lending, mortgages, venture capital, asset management,
-    financial regulation, commercial or residential real estate, housing markets,
-    property development, or businesses whose primary purpose is managing money,
-    risk, investments, or property.
-    """,
+#     "Retail Trade":
+#     """
+#     Businesses that sell products or services directly to individual consumers.
+#     The article primarily discusses retailers, supermarkets, department stores,
+#     restaurants, online retailers, consumer shopping behavior, retail operations,
+#     store openings or closures, pricing, merchandising, or consumer-facing
+#     commerce.
+#     """,
 
-    "Services":
-    """
-    Organizations whose primary business is providing professional, technical,
-    educational, healthcare, hospitality, entertainment, consulting, software,
-    information technology, legal, advertising, scientific, or other intangible
-    services rather than producing physical goods. The article focuses on service
-    delivery, expertise, customer support, digital products, healthcare,
-    education, tourism, or other service-based economic activities.
-    """,
+#     "Finance, Insurance, and Real Estate":
+#     """
+#     Financial institutions, investment firms, insurance companies, banking,
+#     capital markets, lending, mortgages, venture capital, asset management,
+#     financial regulation, commercial or residential real estate, housing markets,
+#     property development, or businesses whose primary purpose is managing money,
+#     risk, investments, or property.
+#     """,
 
-    "Public Administration":
-    """
-    Government agencies, regulatory organizations, public institutions, military
-    administration, public policy implementation, taxation, law enforcement,
-    government operations, or official governmental functions. The article's
-    primary focus is on the activities of government organizations acting in their
-    administrative or regulatory capacity rather than on private industry.
-    """
-}
+#     "Services":
+#     """
+#     Organizations whose primary business is providing professional, technical,
+#     educational, healthcare, hospitality, entertainment, consulting, software,
+#     information technology, legal, advertising, scientific, or other intangible
+#     services rather than producing physical goods. The article focuses on service
+#     delivery, expertise, customer support, digital products, healthcare,
+#     education, tourism, or other service-based economic activities.
+#     """,
 
-# print(MAPPING)
+#     "Public Administration":
+#     """
+#     Government agencies, regulatory organizations, public institutions, military
+#     administration, public policy implementation, taxation, law enforcement,
+#     government operations, or official governmental functions. The article's
+#     primary focus is on the activities of government organizations acting in their
+#     administrative or regulatory capacity rather than on private industry.
+#     """
+# }
 
-MAPPED = {v: k for k , v in Div_MAPPING.items()}
+# # print(MAPPING)
+
+# MAPPED = {v: k for k , v in Div_MAPPING.items()}
 
 # selected model for selection
 model = pipeline(
@@ -192,32 +193,32 @@ model = pipeline(
     model='facebook/bart-large-mnli'
 )
 
-def classify_article_division(article):
-    """
-    classifies industry mentioned in article
-    """
-    # create var classification tet ot assign what text will be used
-    classification_text=article['text'][:1000]
+# def classify_article_division(article):
+#     """
+#     classifies industry mentioned in article
+#     """
+#     # create var classification tet ot assign what text will be used
+#     classification_text=article['text'][:1000]
 
-    # get raw output in results
-    result = model(
-        classification_text,
-        candidate_labels=SIC_DIVISIONS,
-        hypothesis_template="The article focuses on {}",
-        multi_label=False
-    )
+#     # get raw output in results
+#     result = model(
+#         classification_text,
+#         candidate_labels=SIC_DIVISIONS,
+#         hypothesis_template="The article focuses on {}",
+#         multi_label=False
+#     )
 
-    # sort into intents list for use in sql
-    division = []
+#     # sort into intents list for use in sql
+#     division = []
 
-    for rank in range(len(result['labels'])):
-        division.append({
-            'division': MAPPED[result['labels'][rank]],
-            'confidence': float(result['scores'][rank]),
-            'rank': rank+1
-        })
+#     for rank in range(len(result['labels'])):
+#         division.append({
+#             'division': MAPPED[result['labels'][rank]],
+#             'confidence': float(result['scores'][rank]),
+#             'rank': rank+1
+#         })
 
-    return division
+#     return division
 
 
 
@@ -264,7 +265,7 @@ def predict_level(text, candidates, classifier, top_k=3):
                 predictions.append(
                     {
                         "code": code,
-                        "name": info["name"],
+                        "name": info["name"].split(':')[0],
                         "score": float(score),
                     }
                 )

@@ -41,6 +41,37 @@ def extract_article_info(url):
     language = detect_language(text)
 
     article = {
+
+        "url": url,
+
+        "canonical_url": None,
+
+        "title": None,
+
+        "description": None,
+
+        "text": "",
+
+        "word_count": 0,
+
+        "hostname": None,
+
+        "sitename": None,
+
+        "author": None,
+
+        "publish_date": None,
+
+        "modified_date": None,
+
+        "language": None,
+
+        "image_url": None,
+
+        "video_url": None
+    }
+
+    article = {
         "title": title,
         "description": description,
         "text": text or "",

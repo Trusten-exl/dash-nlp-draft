@@ -25,9 +25,16 @@ def full_article_sent(doc):
     neg=0
     neu=0
 
+    sent_sent = []
+
     for sent in doc.sents:
         # print(f'Sentence analyzed:{sent}')
         result = full_sentiment(sent.text)
+        sent_sent.append({
+            "sentence": sent.text,
+            "sentiment": result[0]['label'],
+            "score": result[0]['score']
+        })
         # print(result)
         if result[0]['label'] == "positive":
             score = result[0]['score']
@@ -43,25 +50,28 @@ def full_article_sent(doc):
 
     sentiment = sum(scores)/len(scores)
 
-    return({
+    article_sent = {
         'score': sentiment,
         'sentence count': len(scores),
         'positive sentences': pos,
         'negative sentences': neg,
         'neutral sentences': neu
-    })
+        }
+    
+    return(article_sent, sent_sent)
 
 def ent_sent(entities, doc):
     """
     entity level sentiment analysis
     """
-    scores = []
+    
     entity_scores={}
     sent_list = list(doc.sents)
     pos = 0
     neg = 0
     neu = 0
     for text, info in entities.items():
+        scores = []
         for sent_id in info["sentences"]:
             # print(f'Analyzing Sentence:{sent_list[sent_id].text}')
             result = ent_sentiment(sent_list[sent_id].text, text_pair = text)

@@ -196,6 +196,31 @@ def save_article_sentiment(sentiment, article_id):
         sentiment['negative sentences']
     ))
 
+def save_sent_sentiment(sentiment, article_id):
+    """
+    save each sentence and its sentiment
+    """
+    for x in range(len(sentiment)):
+        execute("""
+        INSERT INTO sent_sentiment (
+            article_id,
+            sentence,
+            sentiment,
+            score
+        )
+        VALUES (?, ?, ?, ?)
+                """,
+            ( 
+                article_id,
+
+                sentiment[x]['sentence'],
+
+                sentiment[x]['sentiment'],
+
+                sentiment[x]['score']
+            ))
+
+
 # save entities to db **SHOULD THIS RETURN ENTITY ID FOR PERSISTENCE? OR JUST TALE SENTIMENT?
 def save_entities(entities, article_id):
     """

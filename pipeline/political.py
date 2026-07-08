@@ -3,15 +3,15 @@ from transformers import pipeline
 
 # pre-set topic names for use in classification - to be edited
 ORIENTATION_LABELS = [
-    "left-wing or progressive",
+    "Progressive or left-wing",
 
-    "center-left",
+    "Center-left",
 
-    "centrist or politically neutral",
+    "Centrist or politically neutral",
 
-    "center-right",
+    "Center-right",
 
-    "right-wing or conservative"
+    "Right-wing or conservative"
 ]
 
 # ORIENTATION_MAP = {
@@ -67,9 +67,9 @@ SALIENCE_LABELS = [
 ]
 
 SALIENCE_MAP = {
-    "is highly focused on a political issue, politician, election, government action, or policy debate": "high",
-    "contains some meaningful political discussion but politics is not the primary focus": "medium",
-    "has little or no political relevance and only minor or incidental political references": "low"
+    "is highly focused on a political issue, politician, election, government action, or policy debate": "High",
+    "contains some meaningful political discussion but politics is not the primary focus": "Medium",
+    "has little or no political relevance and only minor or incidental political references": "Low"
 }
 
 

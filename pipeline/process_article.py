@@ -3,7 +3,7 @@ from topics import classify_article_topics
 from article_intent import classify_article_intent
 from format import classify_article_format
 from sic import classify_sic_article
-from save import save_article, save_topics, save_intents, save_formats, save_article_sentiment, save_entities, save_entity_sentiment, save_sic, save_p_orientation, save_p_salience
+from save import save_article, save_topics, save_intents, save_formats, save_article_sentiment, save_sent_sentiment, save_entities, save_entity_sentiment, save_sic, save_p_orientation, save_p_salience
 from sentiment import full_article_sent, ent_sent
 from ner import extract_ent
 from political import classify_article_salience, classify_poliical_orientation
@@ -74,9 +74,12 @@ def process_article(url):
 
     # print('starting sentiment analysis')
     # full article sentiment
-    sentiment = full_article_sent(doc=doc)
+    article_sent, sent_sent = full_article_sent(doc=doc)
+
+    print(sent_sent)
     # save to db
-    save_article_sentiment(sentiment=sentiment, article_id=article_id)
+    save_article_sentiment(sentiment=article_sent, article_id=article_id)
+    save_sent_sentiment(sent_sent, article_id)
 
     # print('Sentiment Analysis Complete')
     # print(sentiment)
