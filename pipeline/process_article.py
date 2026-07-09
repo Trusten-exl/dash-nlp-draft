@@ -115,4 +115,4 @@ def process_article(url):
 
     return article_id
 
-process_article('https://www.cnbc.com/2026/06/23/meta-glasses-are-new-smart-glasses-starting-at-299.html')
+# process_article('https://www.cnbc.com/2026/06/23/meta-glasses-are-new-smart-glasses-starting-at-299.html')

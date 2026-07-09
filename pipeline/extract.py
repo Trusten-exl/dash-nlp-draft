@@ -44,45 +44,31 @@ def extract_article_info(url):
 
         "url": url,
 
-        "canonical_url": None,
+        "title": title,
 
-        "title": None,
+        "description": description,
 
-        "description": None,
+        "text": text or "",
 
-        "text": "",
+        "word_count": len(text.split()),
 
-        "word_count": 0,
+        "hostname": hostname,
 
-        "hostname": None,
+        "sitename": sitename,
 
-        "sitename": None,
+        "author": author,
 
-        "author": None,
-
-        "publish_date": None,
+        "publish_date": publish_date,
 
         "modified_date": None,
 
-        "language": None,
+        "language": language,
 
         "image_url": None,
 
         "video_url": None
     }
 
-    article = {
-        "title": title,
-        "description": description,
-        "text": text or "",
-        "language": language,
-        "author": author,
-        "url": url,
-        "word_count": len(text.split()),
-        "hostname": hostname,
-        "sitename": sitename,
-        "publish_date": publish_date
-    }
 
     html_metadata, json_ld = extract_html_metadata(
         downloaded
