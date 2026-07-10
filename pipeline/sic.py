@@ -242,7 +242,7 @@ HYPOTHESIS_TEMPLATE = "This article is primarily about {}."
 
 # Tunable gates.
 RELEVANCE_THRESHOLD = 0.55   # min P(industry-related) to attempt SIC at all
-DIVISION_THRESHOLD = 0.50    # min entailment for the winning division
+DIVISION_THRESHOLD = 0.25    # min softmax score for the winning division
 
 # Concise, mutually-distinct division hypotheses. The SIC division names in
 # sic_data embed ~450-char descriptions, which overlap heavily and make the
@@ -397,9 +397,10 @@ def classify_division(text, classifier, top_k=3):
     """
     Classify the SIC division using concise discriminative hypotheses.
 
-    multi_label=True gives absolute per-division entailment so an off-topic
-    article isn't forced into a division just because it scored highest
-    relative to the others.
+    Uses softmax (multi_label=False) to pick the single best-fitting division.
+    Non-industry articles are already filtered by the relevance gate upstream,
+    so here we just need a clear winner (the concise labels prevent the old
+    default-to-Agriculture behaviour); DIVISION_THRESHOLD is a light floor.
     """
     labels = list(DIVISION_HYPOTHESES.values())
     label_to_code = {v: k for k, v in DIVISION_HYPOTHESES.items()}
@@ -408,7 +409,7 @@ def classify_division(text, classifier, top_k=3):
         text,
         candidate_labels=labels,
         hypothesis_template=HYPOTHESIS_TEMPLATE,
-        multi_label=True,
+        multi_label=False,
     )
 
     predictions = []
