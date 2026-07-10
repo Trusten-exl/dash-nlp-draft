@@ -240,6 +240,27 @@ _RELEVANCE_LABELS = {
 
 HYPOTHESIS_TEMPLATE = "This article is primarily about {}."
 
+# Tunable gates.
+RELEVANCE_THRESHOLD = 0.55   # min P(industry-related) to attempt SIC at all
+DIVISION_THRESHOLD = 0.50    # min entailment for the winning division
+
+# Concise, mutually-distinct division hypotheses. The SIC division names in
+# sic_data embed ~450-char descriptions, which overlap heavily and make the
+# zero-shot model default to whichever is listed first (Agriculture). Short
+# discriminative phrases classify far better; codes map back to the real names.
+DIVISION_HYPOTHESES = {
+    "A": "agriculture, farming, ranching, forestry, or fishing",
+    "B": "mining, quarrying, or oil and gas extraction",
+    "C": "construction of buildings or infrastructure",
+    "D": "manufacturing physical products such as machinery, electronics, vehicles, chemicals, or food",
+    "E": "transportation, utilities, energy, or telecommunications",
+    "F": "wholesale distribution of goods to businesses",
+    "G": "retail stores selling goods to consumers",
+    "H": "finance, banking, insurance, investing, or real estate",
+    "I": "services such as software, technology, healthcare, education, media, legal, or hospitality",
+    "J": "government, public administration, law enforcement, or the military",
+}
+
 
 def build_sic_input(article, max_chars=1500):
     """Combine the most informative fields for classification."""
@@ -373,18 +394,35 @@ def get_sic4_candidates(sic3_code):
 
 
 def classify_division(text, classifier, top_k=3):
+    """
+    Classify the SIC division using concise discriminative hypotheses.
 
-    # multi_label=True → absolute per-division entailment scores instead of a
-    # forced softmax, so an off-topic article no longer gets pushed into a
-    # division just because it scored highest relative to the others.
-    return predict_level(
-        text=text,
-        candidates=DIVISIONS,
-        classifier=classifier,
-        top_k=top_k,
-        multi_label=True,
+    multi_label=True gives absolute per-division entailment so an off-topic
+    article isn't forced into a division just because it scored highest
+    relative to the others.
+    """
+    labels = list(DIVISION_HYPOTHESES.values())
+    label_to_code = {v: k for k, v in DIVISION_HYPOTHESES.items()}
+
+    results = classifier(
+        text,
+        candidate_labels=labels,
         hypothesis_template=HYPOTHESIS_TEMPLATE,
+        multi_label=True,
     )
+
+    predictions = []
+    for label, score in zip(results["labels"], results["scores"]):
+        code = label_to_code[label]
+        predictions.append(
+            {
+                "code": code,
+                "name": DIVISIONS[code]["name"].split(":")[0],
+                "score": float(score),
+            }
+        )
+
+    return predictions[:top_k]
 
 
 def classify_sic2(text, division_code, classifier, top_k=3):
@@ -424,7 +462,8 @@ def classify_sic4(text, sic3_code, classifier, top_k=3):
 
 
 def classify_sic_article(article, classifier=model, top_k=3,
-                         relevance_threshold=0.55, division_threshold=0.5):
+                         relevance_threshold=RELEVANCE_THRESHOLD,
+                         division_threshold=DIVISION_THRESHOLD):
     """
     Full hierarchical SIC classification, gated by industry relevance.
 
