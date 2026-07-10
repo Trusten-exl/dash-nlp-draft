@@ -65,7 +65,12 @@ def main():
             div = sic["predictions"]["division"][0]
             sic_str = f'{div["name"]} ({div["score"]:.2f})'
         else:
-            sic_str = f'skipped (P(industry)={sic["relevance_score"]:.2f})'
+            td = sic.get("top_division")
+            best = f', best={td["name"]} {td["score"]:.2f}' if td else ""
+            sic_str = (
+                f'skipped [{sic.get("reason", "?")}] '
+                f'P(industry)={sic["relevance_score"]:.2f}{best}'
+            )
 
         # --- Audience / maturity: upsert ---
         rd = classify_readability(article)

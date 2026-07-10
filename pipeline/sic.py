@@ -485,18 +485,32 @@ def classify_sic_article(article, classifier=model, top_k=3,
 
     empty = {"division": [], "sic2": [], "sic3": [], "sic4": []}
 
+    def result(related, reason, relevance, top_division=None, predictions=empty):
+        return {
+            "related": related,
+            "reason": reason,
+            "relevance_score": relevance["score"],
+            "top_division": top_division,   # {name, score} if a division was scored
+            "predictions": predictions,
+        }
+
     # 1) Is this even about an industry?
     relevance = is_industry_related(text, classifier, relevance_threshold)
     if not relevance["related"]:
-        return {"related": False, "relevance_score": relevance["score"], "predictions": empty}
+        return result(False, "not_industry", relevance)
 
-    # 2) Which division — with an absolute-confidence guard and an explicit
-    #    block on the catch-all "Nonclassifiable Establishments" division.
+    # 2) Which division — with a confidence guard and an explicit block on the
+    #    catch-all "Nonclassifiable Establishments" division.
     division_predictions = classify_division(text, classifier, top_k=top_k)
-
     best = division_predictions[0] if division_predictions else None
-    if best is None or best["score"] < division_threshold or best["code"] == "K":
-        return {"related": False, "relevance_score": relevance["score"], "predictions": empty}
+    top_division = {"name": best["name"], "score": best["score"]} if best else None
+
+    if best is None:
+        return result(False, "no_division", relevance, top_division)
+    if best["code"] == "K":
+        return result(False, "nonclassifiable", relevance, top_division)
+    if best["score"] < division_threshold:
+        return result(False, "weak_division", relevance, top_division)
 
     best_division = best["code"]
 
@@ -508,14 +522,16 @@ def classify_sic_article(article, classifier=model, top_k=3,
 
     sic4_predictions = classify_sic4(text, best_sic3, classifier, top_k=top_k)
 
-    return {
-        "related": True,
-        "relevance_score": relevance["score"],
-        "predictions": {
+    return result(
+        True,
+        "ok",
+        relevance,
+        top_division,
+        {
             "division": division_predictions,
             "sic2": sic2_predictions,
             "sic3": sic3_predictions,
             "sic4": sic4_predictions,
         },
-    }
+    )
 
