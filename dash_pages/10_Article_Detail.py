@@ -689,15 +689,19 @@ def render_dashboard(col):
         else:
             sent_text_color = "#000000"
 
-        # Topics
+        # Topics — show confident topics, else fall back to the top topic
+        # flagged as low-confidence rather than blanking to N/A.
         topic_val = "N/A"
+        topic_subtitle = ""
         if topics is not None and not topics.empty:
-            top_rows = (
-                topics[topics["confidence"] >= CONFIDENCE_THRESHOLDS["topic"]]
-                .sort_values("confidence", ascending=False)
-            )
-            if not top_rows.empty:
-                topic_val = " • ".join(top_rows["topic"].tolist()[:2])
+            ranked = topics.sort_values("confidence", ascending=False)
+            above = ranked[ranked["confidence"] >= CONFIDENCE_THRESHOLDS["topic"]]
+            if not above.empty:
+                topic_val = " • ".join(above["topic"].tolist()[:2])
+            else:
+                top = ranked.iloc[0]
+                topic_val = str(top["topic"])
+                topic_subtitle = f"Low confidence · {top['confidence']:.0%}"
 
         # Format
         fmt_row = best_prediction(formats, "format", CONFIDENCE_THRESHOLDS["format"])
@@ -711,7 +715,7 @@ def render_dashboard(col):
 
         inferred_items = [
             ("Sentiment", sent_val, sent_color, sent_text_color, sent_subtitle),
-            ("Topics", topic_val, "#2d6cdf", "#000000", ""),
+            ("Topics", topic_val, "#2d6cdf", "#000000", topic_subtitle),
             ("Format", fmt_val, "#6f42c1", "#000000", ""),
             ("Intent", intent_val, "#fd7e14", "#000000", ""),
         ]
