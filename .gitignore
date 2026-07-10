@@ -23,7 +23,9 @@ dist/
 .coverage
 htmlcov/
 
-# Streamlit
+# Secrets / environment
+.env
+.env.*
 .streamlit/secrets.toml
 
 # OS / editor
