@@ -14,7 +14,7 @@ Run from the pipeline/ directory on a machine where torch/transformers work:
 """
 
 from db.connection import query, execute, get_conn
-from sic import classify_sic_article
+from sic import classify_sic_article, RELEVANCE_THRESHOLD, DIVISION_THRESHOLD
 from readability import classify_readability
 from save import save_sic, save_readability
 
@@ -45,6 +45,11 @@ def main():
         "SELECT article_id, title, description, text FROM articles ORDER BY article_id"
     )
     total = len(articles)
+    print(
+        f"SIC config: division=softmax(argmax)  "
+        f"RELEVANCE_THRESHOLD={RELEVANCE_THRESHOLD}  "
+        f"DIVISION_THRESHOLD={DIVISION_THRESHOLD}   <- confirm this matches latest code"
+    )
     print(f"Reclassifying {total} articles...\n")
 
     kept = 0

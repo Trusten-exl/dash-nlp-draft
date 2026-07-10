@@ -242,7 +242,11 @@ HYPOTHESIS_TEMPLATE = "This article is primarily about {}."
 
 # Tunable gates.
 RELEVANCE_THRESHOLD = 0.55   # min P(industry-related) to attempt SIC at all
-DIVISION_THRESHOLD = 0.25    # min softmax score for the winning division
+# Division floor is 0.0: the relevance gate is the industry filter. Once an
+# article is industry-related we keep the best-guess division rather than
+# skipping (softmax over 10 labels can leave the top score modest). Raise this
+# only if you want to drop very-low-confidence divisions.
+DIVISION_THRESHOLD = 0.0
 
 # Concise, mutually-distinct division hypotheses. The SIC division names in
 # sic_data embed ~450-char descriptions, which overlap heavily and make the
