@@ -520,6 +520,15 @@ def load_entity_sentiment(article_id):
     return query("SELECT * FROM entity_sentiment WHERE article_id = ?", (article_id,))
 
 
+def load_readability(article_id):
+    """NLP-classified audience/maturity, or None if not yet classified."""
+    try:
+        df = query("SELECT * FROM article_readability WHERE article_id = ?", (article_id,))
+    except Exception:
+        return None  # table not created yet
+    return None if df.empty else df.iloc[0]
+
+
 # ============================================================
 # Selection helpers
 # ============================================================
@@ -583,6 +592,7 @@ salience = load_salience(ARTICLE_ID)
 entities = load_entities(ARTICLE_ID)
 entity_sent = load_entity_sentiment(ARTICLE_ID)
 sentence_sent = load_sentence_sentiment(ARTICLE_ID)
+readability_row = load_readability(ARTICLE_ID)
 
 highlighted_text = sentiment_highlight_text(sentence_sent)
 
@@ -591,12 +601,21 @@ article_html = (
     f"{highlighted_text or ''}</div>"
 )
 
-# Readability (computed from article text)
-readability = compute_readability(article["text"] or "")
-aud_score, aud_label = audience_score_and_label(readability["grade_level"])
-mat_score, mat_label = maturity_score_and_label(
-    readability["reading_ease"], readability["vocab_diversity"]
-)
+# Audience / writing maturity: prefer NLP classification, fall back to the
+# Flesch-based heuristics when the article hasn't been classified yet.
+readability = compute_readability(article["text"] or "")  # kept for Analysis Details
+if readability_row is not None:
+    aud_score = float(readability_row["audience_score"])
+    aud_label = str(readability_row["audience_label"])
+    mat_score = float(readability_row["maturity_score"])
+    mat_label = str(readability_row["maturity_label"])
+    readability_source = "NLP (zero-shot)"
+else:
+    aud_score, aud_label = audience_score_and_label(readability["grade_level"])
+    mat_score, mat_label = maturity_score_and_label(
+        readability["reading_ease"], readability["vocab_diversity"]
+    )
+    readability_source = "Heuristic (Flesch-Kincaid)"
 
 # ============================================================
 # Layout
@@ -815,7 +834,15 @@ def render_dashboard(col):
                     st.dataframe(orientation, hide_index=True, use_container_width=True)
                 if salience is not None and not salience.empty:
                     st.dataframe(salience, hide_index=True, use_container_width=True)
-                st.markdown("**Readability**")
+                st.markdown("**Audience & Writing** *(via " + readability_source + ")*")
+                if readability_row is not None:
+                    st.markdown(
+                        f"- Intended Audience: {aud_label} "
+                        f"({readability_row['audience_confidence']:.0%} conf)  \n"
+                        f"- Writing Maturity: {mat_label} "
+                        f"({readability_row['maturity_confidence']:.0%} conf)"
+                    )
+                st.markdown("**Readability (heuristic)**")
                 st.markdown(
                     f"- Grade Level: {readability['grade_level']:.1f}  \n"
                     f"- Reading Ease: {readability['reading_ease']:.1f}  \n"

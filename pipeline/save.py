@@ -367,3 +367,36 @@ def save_p_salience(p, article_id):
 
             p[x]['confidence']
         ))
+
+def save_readability(r, article_id):
+    """
+    sql code for saving intended-audience and writing-maturity classification
+    """
+    execute("""
+    INSERT OR REPLACE INTO article_readability (
+
+        article_id,
+
+        audience_label,
+        audience_score,
+        audience_confidence,
+
+        maturity_label,
+        maturity_score,
+        maturity_confidence
+
+    )
+
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    """,
+    (
+        article_id,
+
+        r['audience']['label'],
+        r['audience']['score'],
+        r['audience']['confidence'],
+
+        r['maturity']['label'],
+        r['maturity']['score'],
+        r['maturity']['confidence']
+    ))

@@ -176,9 +176,19 @@ def load_data():
     entity_sent_raw = query(
         "SELECT article_id, entity_text, sentiment FROM entity_sentiment"
     )
-    # Writing-maturity score per article (from full text).
+    # Writing-maturity score per article: prefer the NLP-classified score,
+    # fall back to the heuristic when an article hasn't been classified.
+    try:
+        rd = query("SELECT article_id, maturity_score FROM article_readability")
+        db_maturity = dict(zip(rd["article_id"], rd["maturity_score"]))
+    except Exception:
+        db_maturity = {}  # table not created yet
     maturity_map = {
-        int(r["article_id"]): maturity_score(r["text"] or "")
+        int(r["article_id"]): (
+            float(db_maturity[r["article_id"]])
+            if r["article_id"] in db_maturity
+            else maturity_score(r["text"] or "")
+        )
         for _, r in articles.iterrows()
     }
     return (

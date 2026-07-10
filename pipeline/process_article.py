@@ -3,7 +3,8 @@ from topics import classify_article_topics
 from article_intent import classify_article_intent
 from format import classify_article_format
 from sic import classify_sic_article
-from save import save_article, save_topics, save_intents, save_formats, save_article_sentiment, save_sent_sentiment, save_entities, save_entity_sentiment, save_sic, save_p_orientation, save_p_salience
+from readability import classify_readability
+from save import save_article, save_topics, save_intents, save_formats, save_article_sentiment, save_sent_sentiment, save_entities, save_entity_sentiment, save_sic, save_p_orientation, save_p_salience, save_readability
 from sentiment import full_article_sent, ent_sent
 from ner import extract_ent
 from political import classify_article_salience, classify_poliical_orientation
@@ -42,10 +43,18 @@ def process_article(url):
     sic_codes = classify_sic_article(article)
     # print(f"\nSIC codes: {sic_codes}")
 
-    if sic_codes["division"][0]["score"] > 0.2:
-        # print("\nHIGH SIC SIMILAIRTY - SAVING...")
+    if sic_codes["related"]:
+        # print("\nINDUSTRY-RELATED - SAVING...")
+        save_sic(sic_codes["predictions"], article_id)
+    else:
+        print(
+            f"Not industry-related (relevance {sic_codes['relevance_score']:.2f}) "
+            "- skipping SIC"
+        )
 
-        save_sic(sic_codes, article_id)
+    # intended audience + writing maturity (zero-shot NLP)
+    readability = classify_readability(article)
+    save_readability(readability, article_id)
 
     # save to db
     save_topics(t=topics, article_id=article_id)

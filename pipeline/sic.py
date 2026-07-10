@@ -222,8 +222,61 @@ model = pipeline(
 
 
 
-# rewriting with hierarchal structure
-def predict_level(text, candidates, classifier, top_k=3):
+# ------------------------------------------------------------
+# Industry-relevance gate
+# ------------------------------------------------------------
+
+# Contrasting hypotheses used to decide whether an article is about an
+# industry at all, before we try to place it in the SIC hierarchy.
+_RELEVANCE_LABELS = {
+    "industry": (
+        "a specific industry, company, product, or commercial business activity"
+    ),
+    "general": (
+        "general news such as politics, government, sports, crime, or human "
+        "interest, not centered on any particular industry"
+    ),
+}
+
+HYPOTHESIS_TEMPLATE = "This article is primarily about {}."
+
+
+def build_sic_input(article, max_chars=1500):
+    """Combine the most informative fields for classification."""
+    parts = [
+        article.get("title") or "",
+        article.get("description") or "",
+        article.get("text") or "",
+    ]
+    combined = " ".join(p.strip() for p in parts if p and p.strip())
+    return combined[:max_chars]
+
+
+def is_industry_related(text, classifier, threshold=0.55):
+    """
+    Decide whether an article is about an industry at all.
+
+    Runs a two-way zero-shot contrast (industry vs. general news) and returns
+    the probability that the article is industry-focused plus a boolean gate.
+    """
+    result = classifier(
+        text,
+        candidate_labels=list(_RELEVANCE_LABELS.values()),
+        hypothesis_template=HYPOTHESIS_TEMPLATE,
+        multi_label=False,
+    )
+
+    scores = dict(zip(result["labels"], result["scores"]))
+    industry_prob = float(scores[_RELEVANCE_LABELS["industry"]])
+
+    return {"related": industry_prob >= threshold, "score": industry_prob}
+
+
+# ------------------------------------------------------------
+# Hierarchical SIC classification
+# ------------------------------------------------------------
+def predict_level(text, candidates, classifier, top_k=3,
+                  multi_label=False, hypothesis_template=None):
     """
     Generic zero-shot prediction for a hierarchy level.
 
@@ -241,6 +294,13 @@ def predict_level(text, candidates, classifier, top_k=3):
     top_k : int
         Number of predictions to return.
 
+    multi_label : bool
+        When True each label is scored independently (absolute entailment
+        probability); when False the labels compete via softmax.
+
+    hypothesis_template : str | None
+        Optional NLI hypothesis template.
+
     Returns
     -------
     list
@@ -248,10 +308,14 @@ def predict_level(text, candidates, classifier, top_k=3):
 
     labels = [info["name"] for info in candidates.values()]
 
+    kwargs = {"multi_label": multi_label}
+    if hypothesis_template:
+        kwargs["hypothesis_template"] = hypothesis_template
+
     results = classifier(
         text,
         candidate_labels=labels,
-        multi_label=False,
+        **kwargs,
     )
 
     predictions = []
@@ -310,11 +374,16 @@ def get_sic4_candidates(sic3_code):
 
 def classify_division(text, classifier, top_k=3):
 
+    # multi_label=True → absolute per-division entailment scores instead of a
+    # forced softmax, so an off-topic article no longer gets pushed into a
+    # division just because it scored highest relative to the others.
     return predict_level(
         text=text,
         candidates=DIVISIONS,
         classifier=classifier,
         top_k=top_k,
+        multi_label=True,
+        hypothesis_template=HYPOTHESIS_TEMPLATE,
     )
 
 
@@ -354,50 +423,59 @@ def classify_sic4(text, sic3_code, classifier, top_k=3):
     )
 
 
-def classify_sic_article(article, classifier=model, top_k=3):
+def classify_sic_article(article, classifier=model, top_k=3,
+                         relevance_threshold=0.55, division_threshold=0.5):
     """
-    Full hierarchical SIC classification.
+    Full hierarchical SIC classification, gated by industry relevance.
+
+    Returns
+    -------
+    dict
+        {
+          "related": bool,                # is the article about an industry?
+          "relevance_score": float,       # P(industry-related)
+          "predictions": {                # empty lists when not related
+              "division": [...], "sic2": [...],
+              "sic3": [...], "sic4": [...],
+          },
+        }
     """
 
-    text = article['text'][:1000]
+    text = build_sic_input(article)
 
-    division_predictions = classify_division(
-        text,
-        classifier,
-        top_k=top_k,
-    )
+    empty = {"division": [], "sic2": [], "sic3": [], "sic4": []}
 
-    best_division = division_predictions[0]["code"]
+    # 1) Is this even about an industry?
+    relevance = is_industry_related(text, classifier, relevance_threshold)
+    if not relevance["related"]:
+        return {"related": False, "relevance_score": relevance["score"], "predictions": empty}
 
-    sic2_predictions = classify_sic2(
-        text,
-        best_division,
-        classifier,
-        top_k=top_k,
-    )
+    # 2) Which division — with an absolute-confidence guard and an explicit
+    #    block on the catch-all "Nonclassifiable Establishments" division.
+    division_predictions = classify_division(text, classifier, top_k=top_k)
 
+    best = division_predictions[0] if division_predictions else None
+    if best is None or best["score"] < division_threshold or best["code"] == "K":
+        return {"related": False, "relevance_score": relevance["score"], "predictions": empty}
+
+    best_division = best["code"]
+
+    sic2_predictions = classify_sic2(text, best_division, classifier, top_k=top_k)
     best_sic2 = sic2_predictions[0]["code"]
 
-    sic3_predictions = classify_sic3(
-        text,
-        best_sic2,
-        classifier,
-        top_k=top_k,
-    )
-
+    sic3_predictions = classify_sic3(text, best_sic2, classifier, top_k=top_k)
     best_sic3 = sic3_predictions[0]["code"]
 
-    sic4_predictions = classify_sic4(
-        text,
-        best_sic3,
-        classifier,
-        top_k=top_k,
-    )
+    sic4_predictions = classify_sic4(text, best_sic3, classifier, top_k=top_k)
 
     return {
-        "division": division_predictions,
-        "sic2": sic2_predictions,
-        "sic3": sic3_predictions,
-        "sic4": sic4_predictions,
+        "related": True,
+        "relevance_score": relevance["score"],
+        "predictions": {
+            "division": division_predictions,
+            "sic2": sic2_predictions,
+            "sic3": sic3_predictions,
+            "sic4": sic4_predictions,
+        },
     }
 

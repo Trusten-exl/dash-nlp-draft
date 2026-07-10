@@ -195,16 +195,32 @@ CREATE TABLE IF NOT EXISTS political_orientation (
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS political_salience (
-               
+
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-               
+
     article_id INTEGER,
-               
+
     rank  INTEGER,
-               
+
     salience TEXT,
-               
-    confidence REAL               
-)               
+
+    confidence REAL
+)
+""")
+
+# intended audience + writing maturity (zero-shot NLP)
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS article_readability (
+
+    article_id INTEGER PRIMARY KEY,
+
+    audience_label TEXT,
+    audience_score REAL,
+    audience_confidence REAL,
+
+    maturity_label TEXT,
+    maturity_score REAL,
+    maturity_confidence REAL
+)
 """)
 conn.commit()
