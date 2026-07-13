@@ -368,6 +368,45 @@ def save_p_salience(p, article_id):
             p[x]['confidence']
         ))
 
+def save_entity_roles(roles, article_id):
+    """
+    sql code for saving per-entity sports roles (athlete / sporting_event /
+    other). Clears any existing rows for the article first so re-runs don't
+    accumulate duplicates.
+    """
+    execute("DELETE FROM entity_roles WHERE article_id = ?", (article_id,))
+
+    for r in roles:
+        execute("""
+        INSERT INTO entity_roles (
+
+            article_id,
+
+            entity_text,
+
+            entity_label,
+
+            role,
+
+            confidence
+
+        )
+
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (
+            article_id,
+
+            r['entity_text'],
+
+            r['entity_label'],
+
+            r['role'],
+
+            r['confidence']
+        ))
+
+
 def save_readability(r, article_id):
     """
     sql code for saving intended-audience and writing-maturity classification

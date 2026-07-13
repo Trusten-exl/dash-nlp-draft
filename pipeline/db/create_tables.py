@@ -223,4 +223,22 @@ CREATE TABLE IF NOT EXISTS article_readability (
     maturity_confidence REAL
 )
 """)
+
+# per-entity sports role (zero-shot NLP): athlete / sporting_event / other
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS entity_roles (
+
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    article_id INTEGER,
+
+    entity_text TEXT,
+
+    entity_label TEXT,
+
+    role TEXT,
+
+    confidence REAL
+)
+""")
 conn.commit()

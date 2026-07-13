@@ -457,6 +457,88 @@ def salience_badge_html(salience_value) -> str:
 
 
 # ============================================================
+# Sports Highlights
+# ============================================================
+
+
+def is_sports_article(topics) -> bool:
+    """True when the article's highest-confidence topic is Sports."""
+    if topics is None or topics.empty:
+        return False
+    top = topics.sort_values("confidence", ascending=False).iloc[0]
+    return str(top["topic"]).strip().lower() == "sports"
+
+
+def _allowed_entities(roles, role_name: str):
+    """
+    Set of entity_texts the NLP role-classifier assigned to `role_name`.
+
+    Returns None when no classification exists for this article yet, which
+    signals callers to fall back to showing every entity of the NER label
+    (unfiltered) rather than hiding everything.
+    """
+    if roles is None or roles.empty:
+        return None
+    return set(roles[roles["role"] == role_name]["entity_text"])
+
+
+def _entity_chips(entities, label: str, accent: str, allowed=None, limit: int = 8) -> str | None:
+    """
+    Pill list of the top entities of a given NER label, or None if none.
+
+    `allowed` (a set of entity_texts) restricts the list to entities the NLP
+    classifier confirmed for this role; None means no filtering.
+    """
+    if entities is None or entities.empty:
+        return None
+    df = entities[entities["entity_label"] == label]
+    if allowed is not None:
+        df = df[df["entity_text"].isin(allowed)]
+    if df.empty:
+        return None
+    df = df.sort_values("mention_count", ascending=False).head(limit)
+
+    chips = ""
+    for _, row in df.iterrows():
+        name = html.escape(str(row["entity_text"]))
+        count = int(row["mention_count"]) if pd.notna(row["mention_count"]) else 1
+        badge = (
+            f'<span style="opacity:.55;font-size:.62rem;margin-left:5px;">{count}</span>'
+            if count > 1
+            else ""
+        )
+        chips += (
+            f'<span style="display:inline-block;background:{accent}18;color:{accent};'
+            f'border:1px solid {accent}55;border-radius:999px;padding:3px 10px;'
+            f'margin:0 6px 7px 0;font-size:.78rem;font-weight:600;">{name}{badge}</span>'
+        )
+    return chips
+
+
+def sports_highlights_html(entities) -> str | None:
+    """Card listing the key athletes and major events named in the article."""
+    athletes = _entity_chips(entities, "PERSON", "#1f77b4")
+    events = _entity_chips(entities, "EVENT", "#d62728")
+    if athletes is None and events is None:
+        return None
+
+    def _section(sub_label: str, chips: str | None) -> str:
+        if not chips:
+            return ""
+        return (
+            f'<div style="font-size:.58rem;color:#888;text-transform:uppercase;'
+            f'letter-spacing:.04rem;margin:2px 0 7px;">{sub_label}</div>'
+            f'<div style="margin-bottom:10px;">{chips}</div>'
+        )
+
+    body = _section("Athletes", athletes) + _section("Major Events", events)
+    return (
+        '<div style="border-radius:12px;border:1px solid rgba(120,120,120,.25);'
+        f'padding:12px 14px;background:rgba(0,0,0,.02);">{body}</div>'
+    )
+
+
+# ============================================================
 # Database Loaders
 # ============================================================
 
@@ -793,19 +875,28 @@ def render_dashboard(col):
             else:
                 st.info("No industry classification available.")
 
-        # --- Bottom-right: Political orientation gauge + salience badge ---
+        # --- Bottom-right: Sports highlights for sports articles, otherwise
+        #     the political orientation gauge + salience badge. ---
         with bottom_right:
-            st.markdown(section_label_html("Political Intelligence"), unsafe_allow_html=True)
-            orient_row = best_prediction(orientation, "orientation", CONFIDENCE_THRESHOLDS["orientation"])
-            gauge = build_orientation_gauge(orient_row)
-            if gauge is not None:
-                st.plotly_chart(gauge, use_container_width=True, config={"displayModeBar": False})
+            if is_sports_article(topics):
+                st.markdown(section_label_html("Sports Highlights"), unsafe_allow_html=True)
+                sports_html = sports_highlights_html(entities)
+                if sports_html is not None:
+                    st.markdown(sports_html, unsafe_allow_html=True)
+                else:
+                    st.info("No athletes or events detected.")
             else:
-                st.info("No political orientation detected.")
+                st.markdown(section_label_html("Political Intelligence"), unsafe_allow_html=True)
+                orient_row = best_prediction(orientation, "orientation", CONFIDENCE_THRESHOLDS["orientation"])
+                gauge = build_orientation_gauge(orient_row)
+                if gauge is not None:
+                    st.plotly_chart(gauge, use_container_width=True, config={"displayModeBar": False})
+                else:
+                    st.info("No political orientation detected.")
 
-            salience_row = best_prediction(salience, "salience", CONFIDENCE_THRESHOLDS["salience"])
-            if salience_row is not None:
-                st.markdown(salience_badge_html(salience_row["salience"]), unsafe_allow_html=True)
+                salience_row = best_prediction(salience, "salience", CONFIDENCE_THRESHOLDS["salience"])
+                if salience_row is not None:
+                    st.markdown(salience_badge_html(salience_row["salience"]), unsafe_allow_html=True)
 
         # ====================================================
         # Analysis Details (expander)
