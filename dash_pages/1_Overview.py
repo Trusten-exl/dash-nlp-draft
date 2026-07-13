@@ -452,7 +452,7 @@ def _legend(order, colors, counts) -> str:
 
 def political_profile_html(orient1, salience1) -> str:
     o_counts = orient1["orientation"].value_counts().to_dict()
-    s_counts = salience1["salience"].value_counts().to_dict()
+    s_counts = salience1["inclination"].value_counts().to_dict()
 
     total_o = sum(o_counts.get(k, 0) for k in _ORIENT_ORDER) or 1
     avg = sum(_ORIENT_SCORE[k] * o_counts.get(k, 0) for k in _ORIENT_ORDER) / total_o
