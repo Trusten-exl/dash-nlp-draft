@@ -16,9 +16,13 @@ Run from the pipeline/ directory on a machine where torch/transformers work:
     python reclassify_entities.py
 """
 
-from db.connection import query, get_conn
+from db.connection import query, get_conn, execute
 from entity_roles import classify_sports_entities, CONFIDENCE
 from save import save_entity_roles
+
+def clear_roles():
+    execute("DELETE FROM sqlite_sequence WHERE name='entity_roles'")
+    execute("DELETE FROM entity_roles")
 
 
 def ensure_tables():
@@ -31,6 +35,7 @@ def ensure_tables():
             entity_text TEXT,
             entity_label TEXT,
             role TEXT,
+            url TEXT,
             confidence REAL
         )
         """
@@ -56,7 +61,6 @@ def sports_article_ids():
         """
     )
     return [int(a) for a in df["article_id"]]
-
 
 def main():
     ensure_tables()

@@ -482,7 +482,7 @@ def _allowed_entities(roles, role_name: str):
     return set(roles[roles["role"] == role_name]["entity_text"])
 
 
-def _entity_chips(entities, label: str, accent: str, allowed=None, limit: int = 8) -> str | None:
+def _entity_chips(entities, label: str, accent: str, allowed=None, roles=None, limit: int = 10) -> str | None:
     """
     Pill list of the top entities of a given NER label, or None if none.
 
@@ -498,27 +498,33 @@ def _entity_chips(entities, label: str, accent: str, allowed=None, limit: int = 
         return None
     df = df.sort_values("mention_count", ascending=False).head(limit)
 
+    entity_urls = roles.set_index("entity_text")["url"].to_dict()
+
     chips = ""
     for _, row in df.iterrows():
         name = html.escape(str(row["entity_text"]))
-        count = int(row["mention_count"]) if pd.notna(row["mention_count"]) else 1
+        # count = int(row["mention_count"]) if pd.notna(row["mention_count"]) else 1
+        # NOT SHOWING COUNT FOR NOW
+        count = 1
         badge = (
             f'<span style="opacity:.55;font-size:.62rem;margin-left:5px;">{count}</span>'
             if count > 1
             else ""
         )
+        url = (entity_urls.get(name))
         chips += (
+            f'<a href="{url}" target="_blank" class="entity-link">'
             f'<span style="display:inline-block;background:{accent}18;color:{accent};'
             f'border:1px solid {accent}55;border-radius:999px;padding:3px 10px;'
-            f'margin:0 6px 7px 0;font-size:.78rem;font-weight:600;">{name}{badge}</span>'
+            f'margin:0 6px 7px 0;font-size:.78rem;font-weight:600;">{name}{badge}</span></a>'
         )
     return chips
 
 
-def sports_highlights_html(entities) -> str | None:
+def sports_highlights_html(entities, roles) -> str | None:
     """Card listing the key athletes and major events named in the article."""
-    athletes = _entity_chips(entities, "PERSON", "#1f77b4")
-    events = _entity_chips(entities, "EVENT", "#d62728")
+    athletes = _entity_chips(entities, "PERSON", "#1f77b4", allowed=_allowed_entities(roles, 'athlete'), roles=roles)
+    events = _entity_chips(entities, "EVENT", "#d62728", allowed=_allowed_entities(roles,'sporting_event'), roles=roles,)
     if athletes is None and events is None:
         return None
 
@@ -531,7 +537,7 @@ def sports_highlights_html(entities) -> str | None:
             f'<div style="margin-bottom:10px;">{chips}</div>'
         )
 
-    body = _section("Athletes", athletes) + _section("Major Events", events)
+    body = _section("Athletes - Top 10", athletes) + _section("Major Events", events)
     return (
         '<div style="border-radius:12px;border:1px solid rgba(120,120,120,.25);'
         f'padding:12px 14px;background:rgba(0,0,0,.02);">{body}</div>'
@@ -600,6 +606,9 @@ def load_entities(article_id):
 
 def load_entity_sentiment(article_id):
     return query("SELECT * FROM entity_sentiment WHERE article_id = ?", (article_id,))
+
+def load_roles(article_id):
+    return query("SELECT * FROM entity_roles WHERE article_id = ?", (article_id,))
 
 
 def load_readability(article_id):
@@ -675,6 +684,7 @@ entities = load_entities(ARTICLE_ID)
 entity_sent = load_entity_sentiment(ARTICLE_ID)
 sentence_sent = load_sentence_sentiment(ARTICLE_ID)
 readability_row = load_readability(ARTICLE_ID)
+roles = load_roles(ARTICLE_ID)
 
 highlighted_text = sentiment_highlight_text(sentence_sent)
 
@@ -880,7 +890,7 @@ def render_dashboard(col):
         with bottom_right:
             if is_sports_article(topics):
                 st.markdown(section_label_html("Sports Highlights"), unsafe_allow_html=True)
-                sports_html = sports_highlights_html(entities)
+                sports_html = sports_highlights_html(entities, roles)
                 if sports_html is not None:
                     st.markdown(sports_html, unsafe_allow_html=True)
                 else:

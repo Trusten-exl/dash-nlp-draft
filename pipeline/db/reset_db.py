@@ -18,6 +18,7 @@ def clear_all_tables():
     execute("DELETE FROM article_sic")
     execute("DELETE FROM political_orientation")
     execute("DELETE FROM political_salience")
+    execute("DELETE FROM entity_roles")
 
     execute("DELETE FROM sqlite_sequence WHERE name='articles'")
     execute("DELETE FROM sqlite_sequence WHERE name='article_topics'")
@@ -29,6 +30,8 @@ def clear_all_tables():
     execute("DELETE FROM sqlite_sequence WHERE name='article_sic'")
     execute("DELETE FROM sqlite_sequence WHERE name='political_orientation'")
     execute("DELETE FROM sqlite_sequence WHERE name='political_salience'")
+    execute("DELETE FROM sqlite_sequence WHERE name='entity_roles'")
+
     
 
     print("All tables cleared.")

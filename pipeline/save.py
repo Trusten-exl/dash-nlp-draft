@@ -376,6 +376,25 @@ def save_entity_roles(roles, article_id):
     """
     execute("DELETE FROM entity_roles WHERE article_id = ?", (article_id,))
 
+    deduped={}
+
+    for r in roles:
+        url = r["url"]
+
+        # No URL? Treat as unique.
+        if not url:
+            deduped[id(r)] = r
+            continue
+
+        if url not in deduped:
+            deduped[url] = r
+        else:
+            # Keep the longest entity name
+            if len(r["entity_text"]) > len(deduped[url]["entity_text"]):
+                deduped[url] = r
+
+        roles = list(deduped.values())
+
     for r in roles:
         execute("""
         INSERT INTO entity_roles (
@@ -387,12 +406,14 @@ def save_entity_roles(roles, article_id):
             entity_label,
 
             role,
+                
+            url,
 
             confidence
 
         )
 
-        VALUES (?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?)
         """,
         (
             article_id,
@@ -402,6 +423,8 @@ def save_entity_roles(roles, article_id):
             r['entity_label'],
 
             r['role'],
+
+            r['url'],
 
             r['confidence']
         ))

@@ -16,6 +16,7 @@
 import re
 
 from sic import model
+import requests
 
 
 HYPOTHESIS_TEMPLATE = "This text is about {}."
@@ -65,6 +66,57 @@ def _classify_entity(context: str, label_map: dict, classifier) -> tuple[str, fl
     desc_to_key = {desc: key for key, desc in label_map.items()}
     return desc_to_key[result["labels"][0]], float(result["scores"][0])
 
+HEADERS = {"User-Agent": "news-dashboard/1.0 (contact: you@yourcompany.com)"}
+
+def get_celebrity_info(name: str) -> dict:
+    # Step 1: search for the closest matching title
+    try:
+        search_resp = requests.get(
+            "https://en.wikipedia.org/w/api.php",
+            params={
+                "action": "query",
+                "list": "search",
+                "srsearch": name,
+                "format": "json",
+            },
+            headers=HEADERS,
+            timeout=5,
+        )
+        search_resp.raise_for_status()
+
+    except (requests.exceptions.Timeout,
+        requests.exceptions.ConnectionError,
+        requests.exceptions.RequestException) as e:
+        print(f"Wikipedia request failed for '{name}': {e}")
+        return {}
+    results = search_resp.json().get("query", {}).get("search", [])
+    if not results:
+        return {"name": name, "error": "not found"}
+
+    title = results[0]["title"]
+
+    # Step 2: get the summary + url for that title
+    try:
+        summary_resp = requests.get(
+            f"https://en.wikipedia.org/api/rest_v1/page/summary/{title}",
+            headers=HEADERS,
+            timeout=5,
+        )
+        summary_resp.raise_for_status()
+    except (requests.exceptions.Timeout,
+        requests.exceptions.ConnectionError,
+        requests.exceptions.RequestException) as e:
+        print(f"Wikipedia request failed for '{name}': {e}")
+        return{}
+    
+    data = summary_resp.json()
+
+    return {
+        "name": data.get("title"),
+        "summary": data.get("extract"),
+        "url": data.get("content_urls", {}).get("desktop", {}).get("page"),
+    }
+
 
 def classify_sports_entities(article, entities, classifier=model):
     """
@@ -100,11 +152,15 @@ def classify_sports_entities(article, entities, classifier=model):
         else:
             role, conf = "other", 0.0
 
+        info = get_celebrity_info(etext)
+        url = info.get("url") if info else None
+
         out.append(
             {
                 "entity_text": etext,
                 "entity_label": elabel,
                 "role": role,
+                "url": url,
                 "confidence": conf,
             }
         )
