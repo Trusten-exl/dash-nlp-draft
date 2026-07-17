@@ -80,11 +80,21 @@ def generate_wiki_query(entity, context):
 
 HYPOTHESIS_TEMPLATE = "This text is about {}."
 
-# Positive label first; whichever description wins the zero-shot pass maps back
-# to its key. A positive win only "sticks" if it clears CONFIDENCE.
+# Each entry maps a zero-shot description to the role key it represents.
+# _classify_entity picks whichever description the classifier ranks highest
+# across the whole set (not a binary positive-vs-other pair) and maps it
+# back to its key; "other" is just one more candidate in the set.
 PERSON_LABELS = {
     "athlete": "a professional athlete, sports player, or competitor",
-    "other": "a person who is not an athlete",
+    "actor": "a professional actor or actress",
+    "musician": "a musician or singer",
+    "politician": "a politician or government official",
+    "other": "a person who is none of the above",
+}
+
+ORG_LABELS = {
+    "sports_team": "a professional or amateur sports team or club",
+    "other": "an organization that is not a sports team",
 }
 
 EVENT_LABELS = {
@@ -92,9 +102,21 @@ EVENT_LABELS = {
     "other": "an event that is not a sporting event",
 }
 
-# Minimum probability for the positive label before we accept it. Tuned
-# conservatively so the card errs toward precision (real athletes/games) over
-# recall. Adjust after eyeballing reclassify output.
+WORK_OF_ART_LABELS = {
+    "movie_or_tv_show": "a movie, film, or television show",
+    "other": "a creative work that is not a movie or TV show",
+}
+
+LABEL_MAPS = {
+    "PERSON": PERSON_LABELS,
+    "ORG": ORG_LABELS,
+    "EVENT": EVENT_LABELS,
+    "WORK_OF_ART": WORK_OF_ART_LABELS,
+}
+
+# Minimum probability for the winning label before we accept it. Tuned
+# conservatively so displayed entities err toward precision over recall.
+# Adjust after eyeballing reclassify output.
 CONFIDENCE = 0.55
 
 
@@ -197,55 +219,74 @@ def get_celebrity_info(context, name: str) -> dict:
 
 
 
-def classify_sports_entities(article, entities, classifier=model):
+ENRICH_CAP = 20  # max entities per article that get Wikipedia/Claude enrichment
+
+
+def classify_entity_roles(article, entities, classifier=model, enrich_cap=ENRICH_CAP):
     """
-    Classify each PERSON / EVENT entity by its role in a sports article.
+    Classify each recognized entity (PERSON/ORG/EVENT/WORK_OF_ART) into a
+    specific role via zero-shot MNLI, then enrich with a Wikipedia link only
+    for the top `enrich_cap` entities per article (by mention_count) that got
+    a real role (role != "other"). Enrichment is 2 Claude + 2 Wikipedia calls
+    per entity, so it's capped independently of how many entities merely get
+    a cheap (local-model) role label.
 
     Parameters
     ----------
     article : mapping with a "text" key (the article body for context).
-    entities : iterable of mappings, each with "entity_text" and "entity_label".
+    entities : iterable of mappings, each with "entity_text", "entity_label",
+        and "mention_count".
     classifier : the shared zero-shot pipeline (defaults to the BART-MNLI model).
+    enrich_cap : max number of non-"other" entities to enrich per article.
 
     Returns
     -------
-    list of dicts: {entity_text, entity_label, role, confidence}
-        role is "athlete", "sporting_event", or "other". Only PERSON entities
-        can be "athlete" and only EVENT entities can be "sporting_event".
+    list of dicts: {entity_text, entity_label, role, url, confidence, mention_count}
     """
     text = article.get("text") or ""
-    out = []
+    classified = []
 
     for ent in entities:
         etext = ent["entity_text"]
         elabel = ent["entity_label"]
+        mention_count = ent.get("mention_count") or 1
+        label_map = LABEL_MAPS.get(elabel)
 
-        # context = info.get('summary')
-
-        if elabel == "PERSON":
+        if label_map is not None:
             context = _entity_context(text, etext)
-            key, conf = _classify_entity(context, PERSON_LABELS, classifier)
-            role = "athlete" if key == "athlete" and conf >= CONFIDENCE else "other"
-        elif elabel == "EVENT":
-            context = _entity_context(text, etext)
-            key, conf = _classify_entity(context, EVENT_LABELS, classifier)
-            role = "sporting_event" if key == "sporting_event" and conf >= CONFIDENCE else "other"
+            key, conf = _classify_entity(context, label_map, classifier)
+            role = key if conf >= CONFIDENCE else "other"
         else:
-            role, conf = "other", 0.0
+            context, role, conf = etext, "other", 0.0
 
-        
-        info = get_celebrity_info(context, etext)
-        url = info.get("url") if info else None
+        classified.append({
+            "entity_text": etext,
+            "entity_label": elabel,
+            "role": role,
+            "confidence": conf,
+            "mention_count": mention_count,
+            "context": context,
+        })
 
+    eligible = [c for c in classified if c["role"] != "other"]
+    eligible.sort(key=lambda c: c["mention_count"], reverse=True)
+    for c in eligible[:enrich_cap]:
+        c["_enrich"] = True
 
-        out.append(
-            {
-                "entity_text": etext,
-                "entity_label": elabel,
-                "role": role,
-                "url": url,
-                "confidence": conf,
-            }
-        )
+    out = []
+    for c in classified:
+        if c.get("_enrich"):
+            info = get_celebrity_info(c["context"], c["entity_text"])
+            url = info.get("url") if info else None
+        else:
+            url = None
+        out.append({
+            "entity_text": c["entity_text"],
+            "entity_label": c["entity_label"],
+            "role": c["role"],
+            "url": url,
+            "confidence": c["confidence"],
+            "mention_count": c["mention_count"],
+        })
 
     return out

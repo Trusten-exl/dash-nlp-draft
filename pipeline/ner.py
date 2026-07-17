@@ -8,7 +8,8 @@ KEEP_LABELS = {
     "GPE",
     "LOC",
     "NORP",
-    "EVENT"
+    "EVENT",
+    "WORK_OF_ART",
 }
 
 def extract_ent(doc):
