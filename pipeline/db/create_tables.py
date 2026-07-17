@@ -224,7 +224,8 @@ CREATE TABLE IF NOT EXISTS article_readability (
 )
 """)
 
-# per-entity sports role (zero-shot NLP): athlete / sporting_event / other
+# per-entity role (zero-shot NLP): athlete / actor / musician / politician /
+# sports_team / sporting_event / movie_or_tv_show / other
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS entity_roles (
 
@@ -238,7 +239,11 @@ CREATE TABLE IF NOT EXISTS entity_roles (
 
     role TEXT,
 
-    confidence REAL
+    url TEXT,
+
+    confidence REAL,
+
+    mention_count INTEGER
 )
 """)
 conn.commit()
