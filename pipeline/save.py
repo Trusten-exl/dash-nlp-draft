@@ -368,52 +368,49 @@ def save_p_salience(p, article_id):
             p[x]['confidence']
         ))
 
+def _merge_duplicate_urls(roles):
+    """
+    Group entities by resolved Wikipedia url, summing mention_count across
+    aliases (e.g. "Sinner" and "Jannik Sinner") and keeping the longer
+    entity_text as the canonical display name. Entities with no url (not
+    enriched, or no Wikipedia match) pass through unmerged.
+    """
+    merged = {}
+    unresolved = []
+
+    for r in roles:
+        url = r.get("url")
+        if not url:
+            unresolved.append(dict(r))
+            continue
+
+        if url not in merged:
+            merged[url] = dict(r)
+        else:
+            total_mentions = merged[url]["mention_count"] + r["mention_count"]
+            canonical = r if len(r["entity_text"]) > len(merged[url]["entity_text"]) else merged[url]
+            merged[url] = dict(canonical)
+            merged[url]["mention_count"] = total_mentions
+
+    return list(merged.values()) + unresolved
+
+
 def save_entity_roles(roles, article_id):
     """
-    sql code for saving per-entity sports roles (athlete / sporting_event /
-    other). Clears any existing rows for the article first so re-runs don't
-    accumulate duplicates.
+    sql code for saving per-entity roles (athlete / actor / musician /
+    politician / sports_team / sporting_event / movie_or_tv_show / other).
+    Clears any existing rows for the article first so re-runs don't
+    accumulate duplicates. Aliases resolving to the same Wikipedia url are
+    merged (see _merge_duplicate_urls) so mention counts aren't lost.
     """
     execute("DELETE FROM entity_roles WHERE article_id = ?", (article_id,))
 
-    deduped={}
-
-    for r in roles:
-        url = r["url"]
-
-        # No URL? Treat as unique.
-        if not url:
-            deduped[id(r)] = r
-            continue
-
-        if url not in deduped:
-            deduped[url] = r
-        else:
-            # Keep the longest entity name
-            if len(r["entity_text"]) > len(deduped[url]["entity_text"]):
-                deduped[url] = r
-
-        roles = list(deduped.values())
-
-    for r in roles:
+    for r in _merge_duplicate_urls(roles):
         execute("""
         INSERT INTO entity_roles (
-
-            article_id,
-
-            entity_text,
-
-            entity_label,
-
-            role,
-                
-            url,
-
-            confidence
-
+            article_id, entity_text, entity_label, role, url, confidence, mention_count
         )
-
-        VALUES (?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
         (
             article_id,
@@ -426,7 +423,9 @@ def save_entity_roles(roles, article_id):
 
             r['url'],
 
-            r['confidence']
+            r['confidence'],
+
+            r['mention_count'],
         ))
 
 
