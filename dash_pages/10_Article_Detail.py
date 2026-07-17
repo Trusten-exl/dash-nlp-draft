@@ -469,78 +469,93 @@ def is_sports_article(topics) -> bool:
     return str(top["topic"]).strip().lower() == "sports"
 
 
-def _allowed_entities(roles, role_name: str):
+def _role_chips(roles, role_name: str, accent: str, limit: int = 10) -> str | None:
     """
-    Set of entity_texts the NLP role-classifier assigned to `role_name`.
-
-    Returns None when no classification exists for this article yet, which
-    signals callers to fall back to showing every entity of the NER label
-    (unfiltered) rather than hiding everything.
+    Pill list of the top `limit` entities of a given resolved role, sorted by
+    (alias-merged) mention_count. Entities outside the enrichment cap have no
+    url and render as a plain (non-linked) chip.
     """
     if roles is None or roles.empty:
         return None
-    return set(roles[roles["role"] == role_name]["entity_text"])
-
-
-def _entity_chips(entities, label: str, accent: str, allowed=None, roles=None, limit: int = 10) -> str | None:
-    """
-    Pill list of the top entities of a given NER label, or None if none.
-
-    `allowed` (a set of entity_texts) restricts the list to entities the NLP
-    classifier confirmed for this role; None means no filtering.
-    """
-    if entities is None or entities.empty:
-        return None
-    df = entities[entities["entity_label"] == label]
-    if allowed is not None:
-        df = df[df["entity_text"].isin(allowed)]
+    df = roles[roles["role"] == role_name]
     if df.empty:
         return None
     df = df.sort_values("mention_count", ascending=False).head(limit)
 
-    entity_urls = roles.set_index("entity_text")["url"].to_dict()
-
     chips = ""
     for _, row in df.iterrows():
         name = html.escape(str(row["entity_text"]))
-        # count = int(row["mention_count"]) if pd.notna(row["mention_count"]) else 1
-        # NOT SHOWING COUNT FOR NOW
-        count = 1
+        count = int(row["mention_count"]) if pd.notna(row["mention_count"]) else 1
         badge = (
             f'<span style="opacity:.55;font-size:.62rem;margin-left:5px;">{count}</span>'
-            if count > 1
-            else ""
+            if count > 1 else ""
         )
-        url = (entity_urls.get(name))
-        chips += (
-            f'<a href="{url}" target="_blank" class="entity-link">'
+        pill = (
             f'<span style="display:inline-block;background:{accent}18;color:{accent};'
             f'border:1px solid {accent}55;border-radius:999px;padding:3px 10px;'
-            f'margin:0 6px 7px 0;font-size:.78rem;font-weight:600;">{name}{badge}</span></a>'
+            f'margin:0 6px 7px 0;font-size:.78rem;font-weight:600;">{name}{badge}</span>'
         )
+        url = row["url"]
+        if pd.notna(url) and url:
+            chips += f'<a href="{url}" target="_blank" class="entity-link">{pill}</a>'
+        else:
+            chips += pill
     return chips
 
 
-def sports_highlights_html(entities, roles) -> str | None:
-    """Card listing the key athletes and major events named in the article."""
-    athletes = _entity_chips(entities, "PERSON", "#1f77b4", allowed=_allowed_entities(roles, 'athlete'), roles=roles)
-    events = _entity_chips(entities, "EVENT", "#d62728", allowed=_allowed_entities(roles,'sporting_event'), roles=roles,)
-    if athletes is None and events is None:
+def _labeled_section(sub_label: str, chips: str | None) -> str:
+    if not chips:
+        return ""
+    return (
+        f'<div style="font-size:.58rem;color:#888;text-transform:uppercase;'
+        f'letter-spacing:.04rem;margin:2px 0 7px;">{sub_label}</div>'
+        f'<div style="margin-bottom:10px;">{chips}</div>'
+    )
+
+
+def sports_highlights_html(roles) -> str | None:
+    """Card listing the key athletes, teams, and major events named in the article."""
+    athletes = _role_chips(roles, "athlete", "#1f77b4")
+    teams = _role_chips(roles, "sports_team", "#2ca02c")
+    events = _role_chips(roles, "sporting_event", "#d62728")
+    if athletes is None and teams is None and events is None:
         return None
 
-    def _section(sub_label: str, chips: str | None) -> str:
-        if not chips:
-            return ""
-        return (
-            f'<div style="font-size:.58rem;color:#888;text-transform:uppercase;'
-            f'letter-spacing:.04rem;margin:2px 0 7px;">{sub_label}</div>'
-            f'<div style="margin-bottom:10px;">{chips}</div>'
-        )
-
-    body = _section("Athletes - Top 10", athletes) + _section("Major Events", events)
+    body = (
+        _labeled_section("Athletes - Top 10", athletes)
+        + _labeled_section("Teams", teams)
+        + _labeled_section("Major Events", events)
+    )
     return (
         '<div style="border-radius:12px;border:1px solid rgba(120,120,120,.25);'
         f'padding:12px 14px;background:rgba(0,0,0,.02);">{body}</div>'
+    )
+
+
+def important_entities_html(roles) -> str | None:
+    """
+    Full-width card of notable entities for non-sports articles: actors,
+    musicians, politicians, movies/TV shows, and organizations/teams,
+    grouped by category and sorted by (alias-merged) mention count.
+    """
+    sections = [
+        ("Actors", "actor", "#9467bd"),
+        ("Musicians", "musician", "#e377c2"),
+        ("Politicians", "politician", "#8c564b"),
+        ("Movies / TV Shows", "movie_or_tv_show", "#17becf"),
+        ("Organizations", "sports_team", "#2ca02c"),
+    ]
+
+    rendered = "".join(
+        _labeled_section(label, _role_chips(roles, role_name, accent, limit=15))
+        for label, role_name, accent in sections
+    )
+    if not rendered:
+        return None
+
+    return (
+        '<div style="border-radius:12px;border:1px solid rgba(120,120,120,.25);'
+        f'padding:14px 16px;background:rgba(0,0,0,.02);">{rendered}</div>'
     )
 
 
@@ -890,7 +905,7 @@ def render_dashboard(col):
         with bottom_right:
             if is_sports_article(topics):
                 st.markdown(section_label_html("Sports Highlights"), unsafe_allow_html=True)
-                sports_html = sports_highlights_html(entities, roles)
+                sports_html = sports_highlights_html(roles)
                 if sports_html is not None:
                     st.markdown(sports_html, unsafe_allow_html=True)
                 else:
@@ -907,6 +922,15 @@ def render_dashboard(col):
                 salience_row = best_prediction(salience, "salience", CONFIDENCE_THRESHOLDS["salience"])
                 if salience_row is not None:
                     st.markdown(salience_badge_html(salience_row["salience"]), unsafe_allow_html=True)
+
+        if not is_sports_article(topics):
+            st.markdown("<div style='margin-top:20px;'></div>", unsafe_allow_html=True)
+            st.markdown(section_label_html("Important Entities"), unsafe_allow_html=True)
+            important_html = important_entities_html(roles)
+            if important_html is not None:
+                st.markdown(important_html, unsafe_allow_html=True)
+            else:
+                st.info("No notable entities detected.")
 
         # ====================================================
         # Analysis Details (expander)
