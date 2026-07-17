@@ -23,7 +23,7 @@ from pydantic import BaseModel
 
 load_dotenv()
 
-CLAUDE_MODEL = "claude-opus-4-8"
+CLAUDE_MODEL = "claude-haiku-4-5"
 client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY (via .env or the environment)
 
 
