@@ -14,170 +14,68 @@
 # in the DB (see save.save_entity_roles); the dashboard only reads them.
 
 import re
-import json
+
 from sic import model
 import requests
-from transformers import AutoModelForCausalLM, AutoTokenizer
-import torch
+import anthropic
+from dotenv import load_dotenv
+from pydantic import BaseModel
+
+load_dotenv()
+
+CLAUDE_MODEL = "claude-opus-4-8"
+client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY (via .env or the environment)
 
 
-MODEL_NAME = "Qwen/Qwen3-1.7B"
+class WikiQuery(BaseModel):
+    query: str
 
 
-tokenizer = AutoTokenizer.from_pretrained(
-    MODEL_NAME
-)
-
-qwen_model = AutoModelForCausalLM.from_pretrained(
-    MODEL_NAME,
-    torch_dtype="auto",
-    device_map="auto"
-)
-
-qwen_model.eval()
+class EntityResolution(BaseModel):
+    title: str | None  # None = no candidate is a good match
 
 
 def resolve_entity(entity, context, results):
-
+    """Ask Claude to pick the correct candidate title; verified against `results` by the caller."""
     candidates = "\n\n".join(
-        [
-            f"Candidate {i+1}:\n"
-            f"Title: {r['title']}\n"
-            f"Snippet: {r.get('snippet', '')[:300]}"
-            for i, r in enumerate(results)
-        ]
+        f"Candidate {i+1}:\nTitle: {r['title']}\nSnippet: {r.get('snippet', '')[:300]}"
+        for i, r in enumerate(results)
     )
 
-    prompt = f"""
-You are resolving a Wikipedia entity.
-
-Choose the single best Wikipedia article from the candidates.
-
-Entity:
-{entity}
-
-Context:
-{context}
-
-Candidates:
-{candidates}
-
-Rules:
-- Choose ONLY from the candidate titles.
-- Do not create a new title.
-- If no candidate is a good match, return NONE.
-- Return only the exact Wikipedia title.
-
-Answer:
-"""
-
-    messages = [
-        {
-            "role": "system",
-            "content": "You resolve ambiguous entities using context."
-        },
-        {
+    response = client.messages.parse(
+        model=CLAUDE_MODEL,
+        max_tokens=1024,
+        messages=[{
             "role": "user",
-            "content": prompt
-        }
-    ]
-
-    text = tokenizer.apply_chat_template(
-        messages,
-        tokenize=False,
-        add_generation_prompt=True
+            "content": (
+                "Choose the single best Wikipedia article for this entity from the "
+                "candidates below, using the context to disambiguate. Choose ONLY from "
+                "the candidate titles verbatim, or null if none is a good match.\n\n"
+                f"Entity: {entity}\nContext: {context}\n\nCandidates:\n{candidates}"
+            ),
+        }],
+        output_format=EntityResolution,
     )
+    return response.parsed_output.title
 
-    inputs = tokenizer(
-        text,
-        return_tensors="pt"
-    ).to(qwen_model.device)
-
-
-    with torch.no_grad():
-        outputs = qwen_model.generate(
-            **inputs,
-            max_new_tokens=30,
-            do_sample=False
-        )
-
-
-    response = tokenizer.decode(
-        outputs[0][inputs.input_ids.shape[-1]:],
-        skip_special_tokens=True
-    )
-
-    return response.strip()
 
 def generate_wiki_query(entity, context):
-
-    prompt = f"""
-You are an entity disambiguation assistant.
-
-Your task is to improve a Wikipedia search query.
-
-Given:
-- An ambiguous entity name
-- Context from a news article
-
-Generate a short Wikipedia search query that will identify the correct entity.
-
-Rules:
-- Always include the original entity name.
-- Add only the most useful identifying terms.
-- Prefer professions, organizations, sports, locations, events, or other distinguishing details.
-- Do not include explanations.
-- Do not return JSON.
-- Return only the search query as plain text.
-
-Entity:
-{entity}
-
-Context:
-{context}
-
-Search query:
-"""
-
-    messages = [
-        {
-            "role": "system",
-            "content": "You generate concise Wikipedia search queries."
-        },
-        {
+    response = client.messages.parse(
+        model=CLAUDE_MODEL,
+        max_tokens=1024,
+        messages=[{
             "role": "user",
-            "content": prompt
-        }
-    ]
-
-    text = tokenizer.apply_chat_template(
-        messages,
-        tokenize=False,
-        add_generation_prompt=True
+            "content": (
+                "Generate a short Wikipedia search query that will identify the correct "
+                "entity. Always include the original entity name; add only the most "
+                "useful identifying terms (profession, organization, sport, location, "
+                f"event).\n\nEntity: {entity}\nContext: {context}"
+            ),
+        }],
+        output_format=WikiQuery,
     )
-
-    inputs = tokenizer(
-        text,
-        return_tensors="pt"
-    ).to(qwen_model.device)
-
-    with torch.no_grad():
-        outputs = qwen_model.generate(
-            **inputs,
-            max_new_tokens=20,
-            do_sample=False
-        )
-
-    response = tokenizer.decode(
-        outputs[0][inputs.input_ids.shape[-1]:],
-        skip_special_tokens=True
-    )
-
-    response = response.strip().replace('"', '').replace("'", "")
-
-    query = " ".join(response.split()[:5])
-
-    return query
+    query = response.parsed_output.query.strip()
+    return query or entity
 
 
 HYPOTHESIS_TEMPLATE = "This text is about {}."
@@ -227,6 +125,16 @@ def _classify_entity(context: str, label_map: dict, classifier) -> tuple[str, fl
     desc_to_key = {desc: key for key, desc in label_map.items()}
     return desc_to_key[result["labels"][0]], float(result["scores"][0])
 
+def _verified_title(title, results):
+    """None means "no good match" (honored); a title not in `results` is a
+    hallucination, so fall back to the naive top search hit instead of trusting it."""
+    if title is None:
+        return None
+    if title in {r["title"] for r in results}:
+        return title
+    return results[0]["title"]
+
+
 HEADERS = {"User-Agent": "news-dashboard/1.0 (contact: you@yourcompany.com)"}
 
 def get_celebrity_info(context, name: str) -> dict:
@@ -257,10 +165,11 @@ def get_celebrity_info(context, name: str) -> dict:
     results = search_resp.json().get("query", {}).get("search", [])
     if not results:
         return {"name": name, "error": "not found"}
-    
-    # print(results)
+
     print("Resolving Title")
-    title = resolve_entity(entity=name, context=context, results=results)
+    title = _verified_title(resolve_entity(entity=name, context=context, results=results), results)
+    if title is None:
+        return {"name": name, "error": "no match"}
     print(f'Title: {title}, extracting data')
 
     # Step 2: get the summary + url for that title
