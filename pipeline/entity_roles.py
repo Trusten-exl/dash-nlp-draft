@@ -89,12 +89,14 @@ PERSON_LABELS = {
     "actor": "a professional actor or actress",
     "musician": "a musician or singer",
     "politician": "a politician or government official",
+    "executive": "a business executive, founder, or corporate leader",
     "other": "a person who is none of the above",
 }
 
 ORG_LABELS = {
     "sports_team": "a professional or amateur sports team or club",
-    "other": "an organization that is not a sports team",
+    "company": "a business or company",
+    "other": "an organization that is not a sports team or company",
 }
 
 EVENT_LABELS = {

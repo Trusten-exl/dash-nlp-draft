@@ -398,7 +398,8 @@ def _merge_duplicate_urls(roles):
 def save_entity_roles(roles, article_id):
     """
     sql code for saving per-entity roles (athlete / actor / musician /
-    politician / sports_team / sporting_event / movie_or_tv_show / other).
+    politician / executive / sports_team / company / sporting_event /
+    movie_or_tv_show / other).
     Clears any existing rows for the article first so re-runs don't
     accumulate duplicates. Aliases resolving to the same Wikipedia url are
     merged (see _merge_duplicate_urls) so mention counts aren't lost.

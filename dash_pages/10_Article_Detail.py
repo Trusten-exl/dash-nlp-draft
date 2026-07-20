@@ -457,16 +457,8 @@ def salience_badge_html(salience_value) -> str:
 
 
 # ============================================================
-# Sports Highlights
+# Entities
 # ============================================================
-
-
-def is_sports_article(topics) -> bool:
-    """True when the article's highest-confidence topic is Sports."""
-    if topics is None or topics.empty:
-        return False
-    top = topics.sort_values("confidence", ascending=False).iloc[0]
-    return str(top["topic"]).strip().lower() == "sports"
 
 
 def _role_chips(roles, role_name: str, accent: str, limit: int = 10) -> str | None:
@@ -513,37 +505,24 @@ def _labeled_section(sub_label: str, chips: str | None) -> str:
     )
 
 
-def sports_highlights_html(roles) -> str | None:
-    """Card listing the key athletes, teams, and major events named in the article."""
-    athletes = _role_chips(roles, "athlete", "#1f77b4")
-    teams = _role_chips(roles, "sports_team", "#2ca02c")
-    events = _role_chips(roles, "sporting_event", "#d62728")
-    if athletes is None and teams is None and events is None:
-        return None
-
-    body = (
-        _labeled_section("Athletes - Top 10", athletes)
-        + _labeled_section("Teams", teams)
-        + _labeled_section("Major Events", events)
-    )
-    return (
-        '<div style="border-radius:12px;border:1px solid rgba(120,120,120,.25);'
-        f'padding:12px 14px;background:rgba(0,0,0,.02);">{body}</div>'
-    )
-
-
 def important_entities_html(roles) -> str | None:
     """
-    Full-width card of notable entities for non-sports articles: actors,
-    musicians, politicians, movies/TV shows, and organizations/teams,
-    grouped by category and sorted by (alias-merged) mention count.
+    Full-width card of every notable entity named in the article -- athletes,
+    teams, major events, actors, musicians, politicians, executives, movies/TV
+    shows, and companies -- grouped by category and sorted by (alias-merged)
+    mention count. Shown for every article regardless of topic, since a
+    non-sports article can still name athletes (or vice versa).
     """
     sections = [
+        ("Athletes", "athlete", "#1f77b4"),
+        ("Teams", "sports_team", "#2ca02c"),
+        ("Major Events", "sporting_event", "#d62728"),
         ("Actors", "actor", "#9467bd"),
         ("Musicians", "musician", "#e377c2"),
         ("Politicians", "politician", "#8c564b"),
+        ("Executives", "executive", "#ff7f0e"),
         ("Movies / TV Shows", "movie_or_tv_show", "#17becf"),
-        ("Organizations", "sports_team", "#2ca02c"),
+        ("Companies", "company", "#bcbd22"),
     ]
 
     rendered = "".join(
@@ -900,37 +879,28 @@ def render_dashboard(col):
             else:
                 st.info("No industry classification available.")
 
-        # --- Bottom-right: Sports highlights for sports articles, otherwise
-        #     the political orientation gauge + salience badge. ---
+        # --- Bottom-right: political orientation gauge + salience badge,
+        #     computed for every article regardless of topic. ---
         with bottom_right:
-            if is_sports_article(topics):
-                st.markdown(section_label_html("Sports Highlights"), unsafe_allow_html=True)
-                sports_html = sports_highlights_html(roles)
-                if sports_html is not None:
-                    st.markdown(sports_html, unsafe_allow_html=True)
-                else:
-                    st.info("No athletes or events detected.")
+            st.markdown(section_label_html("Political Intelligence"), unsafe_allow_html=True)
+            orient_row = best_prediction(orientation, "orientation", CONFIDENCE_THRESHOLDS["orientation"])
+            gauge = build_orientation_gauge(orient_row)
+            if gauge is not None:
+                st.plotly_chart(gauge, use_container_width=True, config={"displayModeBar": False})
             else:
-                st.markdown(section_label_html("Political Intelligence"), unsafe_allow_html=True)
-                orient_row = best_prediction(orientation, "orientation", CONFIDENCE_THRESHOLDS["orientation"])
-                gauge = build_orientation_gauge(orient_row)
-                if gauge is not None:
-                    st.plotly_chart(gauge, use_container_width=True, config={"displayModeBar": False})
-                else:
-                    st.info("No political orientation detected.")
+                st.info("No political orientation detected.")
 
-                salience_row = best_prediction(salience, "salience", CONFIDENCE_THRESHOLDS["salience"])
-                if salience_row is not None:
-                    st.markdown(salience_badge_html(salience_row["salience"]), unsafe_allow_html=True)
+            salience_row = best_prediction(salience, "salience", CONFIDENCE_THRESHOLDS["salience"])
+            if salience_row is not None:
+                st.markdown(salience_badge_html(salience_row["salience"]), unsafe_allow_html=True)
 
-        if not is_sports_article(topics):
-            st.markdown("<div style='margin-top:20px;'></div>", unsafe_allow_html=True)
-            st.markdown(section_label_html("Important Entities"), unsafe_allow_html=True)
-            important_html = important_entities_html(roles)
-            if important_html is not None:
-                st.markdown(important_html, unsafe_allow_html=True)
-            else:
-                st.info("No notable entities detected.")
+        st.markdown("<div style='margin-top:20px;'></div>", unsafe_allow_html=True)
+        st.markdown(section_label_html("Entities"), unsafe_allow_html=True)
+        important_html = important_entities_html(roles)
+        if important_html is not None:
+            st.markdown(important_html, unsafe_allow_html=True)
+        else:
+            st.info("No notable entities detected.")
 
         # ====================================================
         # Analysis Details (expander)

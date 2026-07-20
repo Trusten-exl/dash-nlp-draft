@@ -53,6 +53,12 @@ def test_classify_entity_resolves_multiway_label_map():
     key, conf = _classify_entity("ctx", ORG_LABELS, _stub_classifier(ORG_LABELS["sports_team"]))
     assert key == "sports_team"
 
+    key, conf = _classify_entity("ctx", ORG_LABELS, _stub_classifier(ORG_LABELS["company"]))
+    assert key == "company"
+
+    key, conf = _classify_entity("ctx", PERSON_LABELS, _stub_classifier(PERSON_LABELS["executive"]))
+    assert key == "executive"
+
     key, conf = _classify_entity("ctx", WORK_OF_ART_LABELS, _stub_classifier(WORK_OF_ART_LABELS["movie_or_tv_show"]))
     assert key == "movie_or_tv_show"
 
