@@ -2,9 +2,9 @@
 Populate the entity_roles table for every article stored in the DB.
 
 Classifies each PERSON / ORG / EVENT / WORK_OF_ART entity into a specific
-role (athlete, actor, musician, politician, sports_team, sporting_event,
-movie_or_tv_show, or other) via zero-shot MNLI, using the article text for
-context, and writes the result to entity_roles. The dashboard reads this to
+role (athlete, actor, musician, politician, executive, sports_team, company,
+sporting_event, movie_or_tv_show, or other) via zero-shot MNLI, using the
+article text for context, and writes the result to entity_roles. The dashboard reads this to
 render the Sports Highlights card (sports articles) or the Important
 Entities widget (every other article).
 
