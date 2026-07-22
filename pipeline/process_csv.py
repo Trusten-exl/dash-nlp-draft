@@ -1,11 +1,13 @@
 import pandas as pd
 import os
+import sys
 from process_article import process_article
 from save import save_article_labels
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 
-CSV = os.path.join(script_dir,"process_data", "articles.csv")
+CSV_NAME = sys.argv[1] if len(sys.argv) > 1 else "articles.csv"
+CSV = os.path.join(script_dir, "process_data", CSV_NAME)
 
 df = pd.read_csv(CSV)
 
