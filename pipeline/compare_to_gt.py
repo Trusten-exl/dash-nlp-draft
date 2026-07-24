@@ -12,10 +12,21 @@ Run from the pipeline/ directory on a machine where torch/transformers work:
 import os
 import pandas as pd
 
-from db.connection import query
+from db.connection import query, execute
 from process_article import process_article
 from entity_roles import classify_entity_roles
-from save import save_entity_roles
+from article_intent import classify_article_intent
+from format import classify_article_format
+from readability import classify_readability
+from political import classify_poliical_orientation, classify_article_salience
+from save import (
+    save_entity_roles,
+    save_intents,
+    save_formats,
+    save_readability,
+    save_p_orientation,
+    save_p_salience,
+)
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 GT_CSV = os.path.join(script_dir, "process_data", "articles_claude.csv")
@@ -120,9 +131,49 @@ def ensure_processed(url):
     return process_article(url)
 
 
-def ensure_entities_classified(article_id):
-    if not query("SELECT 1 FROM entity_roles WHERE article_id = ?", (article_id,)).empty:
+def reclassify_predictions(article_id):
+    """
+    Re-run every classifier that reads stored text (i.e. everything except
+    entity roles, handled separately below, and topic/SIC, unchanged this
+    session so left alone) - always, even if the article was already
+    processed by an older code version. ensure_processed() skips re-scraping
+    for articles already in the DB, which also means process_article()'s
+    classification calls never re-run for them; without this, rerunning
+    compare_to_gt.py after a code change just re-scores stale predictions
+    from before the change (this is exactly what happened the first time -
+    every field but sentiment came back byte-identical to the prior run).
+    Mirrors reclassify.py's approach: reuse stored text, delete old rows
+    before inserting new ones so reruns don't duplicate/stale-shadow rows.
+    """
+    art = query("SELECT title, description, text FROM articles WHERE article_id = ?", (article_id,))
+    if art.empty:
         return
+    article = {
+        "title": art.iloc[0]["title"],
+        "description": art.iloc[0]["description"],
+        "text": art.iloc[0]["text"],
+    }
+
+    execute("DELETE FROM article_intents WHERE article_id = ?", (article_id,))
+    save_intents(classify_article_intent(article), article_id)
+
+    execute("DELETE FROM article_format WHERE article_id = ?", (article_id,))
+    save_formats(classify_article_format(article), article_id)
+
+    save_readability(classify_readability(article), article_id)  # INSERT OR REPLACE
+
+    execute("DELETE FROM political_orientation WHERE article_id = ?", (article_id,))
+    save_p_orientation(classify_poliical_orientation(article), article_id)
+
+    execute("DELETE FROM political_salience WHERE article_id = ?", (article_id,))
+    save_p_salience(classify_article_salience(article), article_id)
+
+
+def reclassify_entities(article_id):
+    """Always re-run entity roles (unlike reclassify_entities.py's script,
+    which is meant for a one-time full-DB pass) - same staleness problem as
+    reclassify_predictions above. save_entity_roles already deletes old rows
+    for this article_id before inserting."""
     art = query("SELECT text FROM articles WHERE article_id = ?", (article_id,))
     if art.empty:
         return
@@ -186,7 +237,8 @@ def main():
         if article_id is None:
             print("  skipped (scrape failed)")
             continue
-        ensure_entities_classified(article_id)
+        reclassify_predictions(article_id)
+        reclassify_entities(article_id)
         rows.append(compare_row(row, article_id))
 
     out = pd.DataFrame(rows)
