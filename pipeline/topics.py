@@ -1,6 +1,3 @@
-from transformers import pipeline
-
-
 # pre-set topic names for use in classification - to be edited
 TOPIC_NAMES = [
     "Politics, government, elections, legislation, public policy, and political campaigns",
@@ -40,11 +37,8 @@ MAPPING = {
 
 MAPPED = {v: k for k , v in MAPPING.items()}
 
-# selected model for topic selection
-model = pipeline(
-    "zero-shot-classification",
-    model='facebook/bart-large-mnli'
-)
+# Shared BART-MNLI pipeline (see sic.py) - avoid loading a second ~1.6GB copy.
+from sic import model
 
 def classify_article_topics(article):
     """

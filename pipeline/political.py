@@ -1,10 +1,5 @@
-from transformers import pipeline
-
-# selected model for topic selection
-model = pipeline(
-    "zero-shot-classification",
-    model='facebook/bart-large-mnli'
-)
+# Shared BART-MNLI pipeline (see sic.py) - avoid loading a second ~1.6GB copy.
+from sic import model
 
 HYPOTHESIS_TEMPLATE = "This article is primarily about {}."
 

@@ -1,5 +1,3 @@
-from transformers import pipeline
-
 # Concise, discriminative phrases. The previous paragraph-length descriptions
 # overlapped so much that BART-MNLI's softmax picked "Article" (the generic
 # catch-all) for 89/89 GT articles regardless of the true format - the same
@@ -23,11 +21,8 @@ MAPPING = {
 FORMATS = list(MAPPING.values())
 MAPPED = {v: k for k, v in MAPPING.items()}
 
-# selected model for intent selection
-model = pipeline(
-    "zero-shot-classification",
-    model='facebook/bart-large-mnli'
-)
+# Shared BART-MNLI pipeline (see sic.py) - avoid loading a second ~1.6GB copy.
+from sic import model
 
 def classify_article_format(article):
     """
