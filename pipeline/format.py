@@ -1,38 +1,27 @@
 from transformers import pipeline
 
-
-# pre-set intent names for use in classification - to be edited
-FORMATS = [
-    "A time-sensitive news article published shortly after an event occurs. Its primary purpose is to quickly report new information, recent developments, or urgent updates. The article focuses on delivering the latest verified facts and may be updated as additional details become available. It emphasizes immediacy and timeliness rather than in-depth background, analysis, or storytelling.",
-
-    "An in-depth article that explores a person, event, trend, or topic through detailed reporting, storytelling, interviews, or human-interest elements. The article emphasizes narrative, context, and descriptive writing rather than immediate news. It often examines broader themes, personal experiences, or unique perspectives to provide readers with a richer understanding of the subject.",
-
-    "An article that interprets or evaluates events rather than simply reporting them. It examines causes, significance, strategies, trends, implications, or possible future outcomes. The article synthesizes facts and evidence to provide insight and context, helping readers understand why an event matters rather than only describing what happened.",
-
-    "An article summarizing the events and outcome of a sporting contest. It describes the final score, key plays, standout performances, important statistics, turning points, and notable moments from the game. The primary purpose is to document and explain how the competition unfolded rather than discussing broader issues surrounding the teams or sport.",
-
-    "A sports-related news article that focuses on events occurring outside of actual competition. Topics may include player transfers, injuries, coaching changes, contracts, league policies, business operations, legal matters, disciplinary actions, ownership, facilities, or other organizational developments. The article reports news connected to sports without primarily describing the action or results of a game.",
-
-    "A standard news article whose primary purpose is to report factual information about an event, development, announcement, or situation in a clear, objective, and balanced manner. The article presents verified facts, statements from relevant sources, and essential context without emphasizing urgency, in-depth storytelling, personal opinion, or extensive interpretation. Unlike breaking news, it is not defined by immediacy; unlike a feature, it does not focus on narrative or human-interest storytelling; and unlike analysis, it does not primarily interpret the significance or implications of events. Its main goal is to accurately inform readers about what happened."
-]
-
+# Concise, discriminative phrases. The previous paragraph-length descriptions
+# overlapped so much that BART-MNLI's softmax picked "Article" (the generic
+# catch-all) for 89/89 GT articles regardless of the true format - the same
+# lesson sic.py already learned for SIC divisions (see its comment on
+# DIVISION_HYPOTHESES): short, concrete phrases classify far better than long
+# overlapping paragraphs.
 MAPPING = {
-    "Breaking": "A time-sensitive news article published shortly after an event occurs. Its primary purpose is to quickly report new information, recent developments, or urgent updates. The article focuses on delivering the latest verified facts and may be updated as additional details become available. It emphasizes immediacy and timeliness rather than in-depth background, analysis, or storytelling.",
+    "Breaking": "breaking news about a very recent event, updated as facts come in",
 
-    "Feature": "An in-depth article that explores a person, event, trend, or topic through detailed reporting, storytelling, interviews, or human-interest elements. The article emphasizes narrative, context, and descriptive writing rather than immediate news. It often examines broader themes, personal experiences, or unique perspectives to provide readers with a richer understanding of the subject.",
+    "Feature": "an in-depth feature or narrative profile with storytelling and human-interest detail",
 
-    "Analysis": "An article that interprets or evaluates events rather than simply reporting them. It examines causes, significance, strategies, trends, implications, or possible future outcomes. The article synthesizes facts and evidence to provide insight and context, helping readers understand why an event matters rather than only describing what happened.",
+    "Analysis": "analysis of the causes, significance, or implications of events, not just what happened",
 
-    "Game Recap": "An article summarizing the events and outcome of a sporting contest. It describes the final score, key plays, standout performances, important statistics, turning points, and notable moments from the game. The primary purpose is to document and explain how the competition unfolded rather than discussing broader issues surrounding the teams or sport.",
+    "Game Recap": "a recap of a sports game's final score, key plays, and standout performances",
 
-    "Off-Field News": "A sports-related news article that focuses on events occurring outside of actual competition. Topics may include player transfers, injuries, coaching changes, contracts, league policies, business operations, legal matters, disciplinary actions, ownership, facilities, or other organizational developments. The article reports news connected to sports without primarily describing the action or results of a game.",
+    "Off-Field News": "sports business news such as trades, contracts, injuries, or league policy, not describing a game itself",
 
-    "Article": "A standard news article whose primary purpose is to report factual information about an event, development, announcement, or situation in a clear, objective, and balanced manner. The article presents verified facts, statements from relevant sources, and essential context without emphasizing urgency, in-depth storytelling, personal opinion, or extensive interpretation. Unlike breaking news, it is not defined by immediacy; unlike a feature, it does not focus on narrative or human-interest storytelling; and unlike analysis, it does not primarily interpret the significance or implications of events. Its main goal is to accurately inform readers about what happened."
+    "Article": "a routine, straightforward news article reporting facts without urgency, narrative, or analysis",
 }
 
-# print(MAPPING)
-
-MAPPED = {v: k for k , v in MAPPING.items()}
+FORMATS = list(MAPPING.values())
+MAPPED = {v: k for k, v in MAPPING.items()}
 
 # selected model for intent selection
 model = pipeline(
@@ -52,7 +41,7 @@ def classify_article_format(article):
     result = model(
         classification_text,
         candidate_labels=FORMATS,
-        hypothesis_template="This article is formatted as a {}",
+        hypothesis_template="This article is {}",
         multi_label=False
     )
 
@@ -67,4 +56,3 @@ def classify_article_format(article):
         })
 
     return format
-
