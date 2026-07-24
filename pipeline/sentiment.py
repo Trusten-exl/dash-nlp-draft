@@ -27,28 +27,33 @@ def full_article_sent(doc):
 
     sent_sent = []
 
-    for sent in doc.sents:
-        # print(f'Sentence analyzed:{sent}')
-        result = full_sentiment(sent.text)
+    # Batch all sentences into one call instead of one model call per
+    # sentence - some articles run 500+ sentences, and per-call overhead
+    # (tokenization/padding setup) dominates at that scale. Same model, same
+    # inputs, same per-sentence result - just grouped into fewer forward
+    # passes.
+    sentences = list(doc.sents)
+    results = full_sentiment([s.text for s in sentences]) if sentences else []
+
+    for sent, result in zip(sentences, results):
         sent_sent.append({
             "sentence": sent.text,
-            "sentiment": result[0]['label'],
-            "score": result[0]['score']
+            "sentiment": result['label'],
+            "score": result['score']
         })
-        # print(result)
-        if result[0]['label'] == "positive":
-            score = result[0]['score']
+        if result['label'] == "positive":
+            score = result['score']
             pos+=1
-        elif result[0]['label'] == "negative":
-            score = -result[0]['score']
+        elif result['label'] == "negative":
+            score = -result['score']
             neg+=1
         else:
             score=0
             neu+=1
-        
+
         scores.append(score)
 
-    sentiment = sum(scores)/len(scores)
+    sentiment = sum(scores)/len(scores) if scores else 0.0
 
     article_sent = {
         'score': sentiment,
@@ -64,32 +69,36 @@ def ent_sent(entities, doc):
     """
     entity level sentiment analysis
     """
-    
-    entity_scores={}
+
     sent_list = list(doc.sents)
-    pos = 0
-    neg = 0
-    neu = 0
+
+    # Flatten every (entity, sentence) pair across all entities into one
+    # batched call instead of a call per pair - an article with dozens of
+    # entities each mentioned several times was previously one model call per
+    # mention. text_pair batches as a list of {"text", "text_pair"} dicts.
+    pairs = []
+    inputs = []
     for text, info in entities.items():
-        scores = []
         for sent_id in info["sentences"]:
-            # print(f'Analyzing Sentence:{sent_list[sent_id].text}')
-            result = ent_sentiment(sent_list[sent_id].text, text_pair = text)
-            if result[0]['label'] == "Positive":
-                score = result[0]['score']
-                pos+=1
-            elif result[0]['label'] == "Negative":
-                score = -result[0]['score']
-                neg+=1
-            else:
-                score=0
-                neu+=1
-            scores.append(score)
+            pairs.append(text)
+            inputs.append({"text": sent_list[sent_id].text, "text_pair": text})
 
-        ent_score = sum(scores)/len(scores)
-        entity_scores[text] = (ent_score, len(scores))
+    results = ent_sentiment(inputs) if inputs else []
 
-    return entity_scores
+    scores_by_entity = {}
+    for text, result in zip(pairs, results):
+        if result['label'] == "Positive":
+            score = result['score']
+        elif result['label'] == "Negative":
+            score = -result['score']
+        else:
+            score = 0
+        scores_by_entity.setdefault(text, []).append(score)
+
+    return {
+        text: (sum(scores) / len(scores), len(scores))
+        for text, scores in scores_by_entity.items()
+    }
 
 
 
