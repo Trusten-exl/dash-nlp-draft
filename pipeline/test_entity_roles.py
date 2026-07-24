@@ -30,10 +30,14 @@ assert _verified_title("Ronaldo Nazário", RESULTS) == "Cristiano Ronaldo"
 
 
 def _stub_classifier(winning_description):
-    """Fake zero-shot pipeline: always ranks `winning_description` first."""
-    def classifier(context, candidate_labels, hypothesis_template, multi_label):
+    """Fake batched zero-shot pipeline: ranks `winning_description` first for
+    every context in the batch (contexts is a list; returns a list of results,
+    one per context - same shape the real zero-shot pipeline returns for
+    batched sequence input)."""
+    def classifier(contexts, candidate_labels, hypothesis_template, multi_label):
         others = [d for d in candidate_labels if d != winning_description]
-        return {"labels": [winning_description] + others, "scores": [0.91] + [0.01] * len(others)}
+        result = {"labels": [winning_description] + others, "scores": [0.91] + [0.01] * len(others)}
+        return [result for _ in contexts]
     return classifier
 
 
@@ -69,11 +73,14 @@ def test_classify_entity_roles_caps_enrichment_by_mention_count():
     role_by_text = {f"Player{i}": "athlete" for i in range(25)}
     role_by_text["Extra"] = "other"
 
-    def stub_classifier(context, candidate_labels, hypothesis_template, multi_label):
-        role = role_by_text.get(context, "other")
-        winning_desc = PERSON_LABELS[role]
-        others = [d for d in candidate_labels if d != winning_desc]
-        return {"labels": [winning_desc] + others, "scores": [0.91] + [0.01] * len(others)}
+    def stub_classifier(contexts, candidate_labels, hypothesis_template, multi_label):
+        results = []
+        for context in contexts:
+            role = role_by_text.get(context, "other")
+            winning_desc = PERSON_LABELS[role]
+            others = [d for d in candidate_labels if d != winning_desc]
+            results.append({"labels": [winning_desc] + others, "scores": [0.91] + [0.01] * len(others)})
+        return results
 
     entities = [
         {"entity_text": f"Player{i}", "entity_label": "PERSON", "mention_count": i + 1}

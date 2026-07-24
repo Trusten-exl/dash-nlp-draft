@@ -144,15 +144,29 @@ def _entity_context(text: str, entity_text: str, max_chars: int = 500) -> str:
 
 def _classify_entity(context: str, label_map: dict, classifier) -> tuple[str, float]:
     """Zero-shot over a label map's descriptions; returns (winning key, prob)."""
+    return _classify_entities_batch([context], label_map, classifier)[0]
+
+
+def _classify_entities_batch(contexts: list, label_map: dict, classifier) -> list:
+    """
+    Batched version of _classify_entity: every context shares the same
+    label_map (and thus the same candidate set), so they classify in one
+    call instead of one call per entity - an article with dozens of entities
+    of the same type was previously one model call each.
+
+    Returns a list of (winning key, prob) tuples, same order as `contexts`.
+    """
+    if not contexts:
+        return []
     descriptions = list(label_map.values())
-    result = classifier(
-        context,
+    desc_to_key = {desc: key for key, desc in label_map.items()}
+    results = classifier(
+        contexts,
         candidate_labels=descriptions,
         hypothesis_template=HYPOTHESIS_TEMPLATE,
         multi_label=False,
     )
-    desc_to_key = {desc: key for key, desc in label_map.items()}
-    return desc_to_key[result["labels"][0]], float(result["scores"][0])
+    return [(desc_to_key[r["labels"][0]], float(r["scores"][0])) for r in results]
 
 def _verified_title(title, results):
     """None means "no good match" (honored); a title not in `results` is a
@@ -251,27 +265,42 @@ def classify_entity_roles(article, entities, classifier=model, enrich_cap=ENRICH
     list of dicts: {entity_text, entity_label, role, url, confidence, mention_count}
     """
     text = article.get("text") or ""
-    classified = []
+    entities = list(entities)
 
-    for ent in entities:
-        etext = ent["entity_text"]
-        elabel = ent["entity_label"]
-        mention_count = ent.get("mention_count") or 1
+    # Group by entity_label first: entities sharing a label_map share the
+    # same candidate set, so each group classifies in one batched call
+    # instead of one call per entity (an article can have dozens of PERSON
+    # entities alone).
+    by_label = {}
+    for i, ent in enumerate(entities):
+        by_label.setdefault(ent["entity_label"], []).append(i)
+
+    contexts = [None] * len(entities)
+    key_conf = [None] * len(entities)
+
+    for elabel, idxs in by_label.items():
         label_map = LABEL_MAPS.get(elabel)
+        if label_map is None:
+            for i in idxs:
+                contexts[i] = entities[i]["entity_text"]
+                key_conf[i] = ("other", 0.0)
+            continue
 
-        if label_map is not None:
-            context = _entity_context(text, etext)
-            key, conf = _classify_entity(context, label_map, classifier)
-            role = key if conf >= CONFIDENCE else "other"
-        else:
-            context, role, conf = etext, "other", 0.0
+        for i in idxs:
+            contexts[i] = _entity_context(text, entities[i]["entity_text"])
+        batch = _classify_entities_batch([contexts[i] for i in idxs], label_map, classifier)
+        for i, kc in zip(idxs, batch):
+            key_conf[i] = kc
 
+    classified = []
+    for ent, context, (key, conf) in zip(entities, contexts, key_conf):
+        role = key if conf >= CONFIDENCE else "other"
         classified.append({
-            "entity_text": etext,
-            "entity_label": elabel,
+            "entity_text": ent["entity_text"],
+            "entity_label": ent["entity_label"],
             "role": role,
             "confidence": conf,
-            "mention_count": mention_count,
+            "mention_count": ent.get("mention_count") or 1,
             "context": context,
         })
 
