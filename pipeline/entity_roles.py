@@ -116,10 +116,15 @@ LABEL_MAPS = {
     "WORK_OF_ART": WORK_OF_ART_LABELS,
 }
 
-# Minimum probability for the winning label before we accept it. Tuned
-# conservatively so displayed entities err toward precision over recall.
-# Adjust after eyeballing reclassify output.
-CONFIDENCE = 0.55
+# Minimum probability for the winning label before we accept it. Lowered from
+# the original 0.55: gt_comparison.csv showed 143/675 GT entities (21%) landed
+# on "other" while a real role was in fact the top candidate, just under the
+# old bar - since "other" only ever comes from `role` itself winning the vote
+# (see _classify_entity/classify_entity_roles below), lowering this can only
+# recover suppressed real roles, never turn a genuine "other" into a false
+# positive. Re-check gt_comparison.csv's entity recall/precision after
+# lowering this to confirm the trade is worth it.
+CONFIDENCE = 0.45
 
 
 def _entity_context(text: str, entity_text: str, max_chars: int = 500) -> str:
