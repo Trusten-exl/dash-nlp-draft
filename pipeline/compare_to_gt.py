@@ -44,17 +44,29 @@ def _top(table, col, article_id):
     return df.iloc[0][col] if not df.empty else None
 
 
+# Thresholds on article_sentiment.sentiment_score (avg of per-sentence scores,
+# positive/negative/0). Plurality-of-sentence-counts was tried first and only
+# hit 48% - most articles have a majority of purely-factual (neutral)
+# sentences even when clearly positive/negative overall, so it almost always
+# picked Neutral. The continuous score separates the GT classes cleanly
+# (median -0.23 / 0.05 / 0.17 for Negative/Neutral/Positive); a symmetric
+# +-0.1 band around 0 gets 62% on the GT set.
+SENTIMENT_BAND = 0.1
+
+
 def _sentiment_label(article_id):
-    """Plurality of sentence-level sentiment counts, to match the GT's single label."""
     df = query(
-        "SELECT positive, neutral, negative FROM article_sentiment WHERE article_id = ?",
+        "SELECT sentiment_score FROM article_sentiment WHERE article_id = ?",
         (article_id,),
     )
     if df.empty:
         return None
-    row = df.iloc[0]
-    counts = {"Positive": row["positive"], "Neutral": row["neutral"], "Negative": row["negative"]}
-    return max(counts, key=counts.get)
+    score = df.iloc[0]["sentiment_score"]
+    if score <= -SENTIMENT_BAND:
+        return "Negative"
+    if score >= SENTIMENT_BAND:
+        return "Positive"
+    return "Neutral"
 
 
 def parse_gt_entities(raw):
