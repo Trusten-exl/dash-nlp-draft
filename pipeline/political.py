@@ -1,44 +1,76 @@
 from transformers import pipeline
 
-
-# pre-set topic names for use in classification - to be edited
-ORIENTATION_LABELS = [
-    "Progressive or left-wing",
-
-    "Center-left",
-
-    "Centrist or politically neutral",
-
-    "Center-right",
-
-    "Right-wing or conservative"
-]
-
-# ORIENTATION_MAP = {
-#     "left-wing or progressive political position": "left",
-#     "center-left political position": "center-left",
-#     "centrist or politically neutral position": "neutral",
-#     "center-right political position": "center-right",
-#     "right-wing or conservative political position": "right"
-# }
-
-# MAPPED = {v: k for v , k in ORIENTATION_MAP.items()}
-
 # selected model for topic selection
 model = pipeline(
     "zero-shot-classification",
     model='facebook/bart-large-mnli'
 )
 
+HYPOTHESIS_TEMPLATE = "This article is primarily about {}."
+
+# ------------------------------------------------------------
+# Political-relevance gate
+# ------------------------------------------------------------
+# Same two-way-contrast pattern as sic.py's industry-relevance gate: forcing
+# every article through a 5-way orientation softmax (or a 3-way salience
+# vote) meant an apolitical earnings/tech/sports article still had to "win"
+# one of those labels, and BART-MNLI reliably picked a partisan-sounding one
+# or "highly focused on politics" over the honest answer (not political at
+# all). Deciding relevance first and defaulting non-political articles to
+# Centrist/Low fixes that at the source instead of trying to out-word the
+# 5-way and 3-way prompts.
+_RELEVANCE_LABELS = {
+    "political": "a political issue, politician, election, legislation, or government action",
+    "general": (
+        "general news such as business, technology, sports, entertainment, or "
+        "human interest, not centered on politics or government"
+    ),
+}
+RELEVANCE_THRESHOLD = 0.55  # min P(political) to bother with orientation/salience at all
+
+
+def is_political(text, classifier=None, threshold=RELEVANCE_THRESHOLD):
+    classifier = classifier or model
+    result = classifier(
+        text,
+        candidate_labels=list(_RELEVANCE_LABELS.values()),
+        hypothesis_template=HYPOTHESIS_TEMPLATE,
+        multi_label=False,
+    )
+    scores = dict(zip(result["labels"], result["scores"]))
+    political_prob = float(scores[_RELEVANCE_LABELS["political"]])
+    return {"related": political_prob >= threshold, "score": political_prob}
+
+
+# ------------------------------------------------------------
+# Orientation
+# ------------------------------------------------------------
+# "Centrist or politically neutral" is no longer a competing label here - the
+# relevance gate above is what assigns Centrist now, so this list only needs
+# to rank the ways an article CAN lean once it's already confirmed political.
+ORIENTATION_LABELS = [
+    "Progressive or left-wing",
+    "Center-left",
+    "Center-right",
+    "Right-wing or conservative",
+]
+
+
 def classify_poliical_orientation(article):
     """
     classifies orientation of article using above selected model / topics
     returns dict of orienattion / ranks, and confidence levels
     """
-    # create var classification tet ot assign what text will be used
-    classification_text=article['text'][:1000]
+    classification_text = article['text'][:1000]
 
-    # get raw output in results
+    gate = is_political(classification_text)
+    if not gate["related"]:
+        return [{
+            "orientation": "Centrist or politically neutral",
+            "confidence": 1 - gate["score"],
+            "rank": 1,
+        }]
+
     result = model(
         classification_text,
         candidate_labels=ORIENTATION_LABELS,
@@ -46,7 +78,6 @@ def classify_poliical_orientation(article):
         multi_label=False
     )
 
-    # sort into topics list for use in sql
     orientation = []
 
     for rank in range(len(result['labels'])):
@@ -59,53 +90,45 @@ def classify_poliical_orientation(article):
     return orientation
 
 
-
-SALIENCE_LABELS = [
-    "is highly focused on a political issue, politician, election, government action, or policy debate",
-    "contains some meaningful political discussion but politics is not the primary focus",
-    "has little or no political relevance and only minor or incidental political references"
-]
-
-SALIENCE_MAP = {
-    "is highly focused on a political issue, politician, election, government action, or policy debate": "High",
-    "contains some meaningful political discussion but politics is not the primary focus": "Medium",
-    "has little or no political relevance and only minor or incidental political references": "Low"
+# ------------------------------------------------------------
+# Salience
+# ------------------------------------------------------------
+# Same reasoning as orientation: Low is now the gate's job. Down to a clean
+# High-vs-Medium contest, which is what these two were actually confusable
+# on (the old 3-way vote almost never picked Medium at all).
+_SALIENCE_HYPOTHESES = {
+    "High": "highly focused on a political issue, politician, election, or government action",
+    "Medium": "touches on politics or government, but that is not the article's main focus",
 }
+SALIENCE_LABELS = list(_SALIENCE_HYPOTHESES.values())
+SALIENCE_MAP = {v: k for k, v in _SALIENCE_HYPOTHESES.items()}
 
-
-MAPPED = {v: k for v, k in SALIENCE_MAP.items()}
-
-# selected model for topic selection
-model = pipeline(
-    "zero-shot-classification",
-    model='facebook/bart-large-mnli'
-)
 
 def classify_article_salience(article):
     """
     classifies topic of article using above selected model / topics
     returns dict of topics / ranks, and confidence levels
     """
-    # create var classification tet ot assign what text will be used
-    classification_text=article['text'][:1000]
+    classification_text = article['text'][:1000]
 
-    # get raw output in results
+    gate = is_political(classification_text)
+    if not gate["related"]:
+        return [{"salience": "Low", "confidence": 1 - gate["score"], "rank": 1}]
+
     result = model(
         classification_text,
         candidate_labels=SALIENCE_LABELS,
-        hypothesis_template="This news article {}",
-        multi_label=True
+        hypothesis_template=HYPOTHESIS_TEMPLATE,
+        multi_label=False
     )
 
-    # sort into topics list for use in sql
     salience = []
 
     for rank in range(len(result['labels'])):
         salience.append({
-            'salience': MAPPED[result['labels'][rank]],
+            'salience': SALIENCE_MAP[result['labels'][rank]],
             'confidence': float(result['scores'][rank]),
             'rank': rank+1
         })
 
     return salience
-
